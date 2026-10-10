@@ -1040,9 +1040,9 @@ namespace Ogre
         const bool oldFullscreen = mIsFullScreen;
 
         HMONITOR hMonitor = MonitorFromWindow(mHWnd, MONITOR_DEFAULTTONEAREST);
-        MONITORINFOEX monitorInfo;
-        memset(&monitorInfo, 0, sizeof(monitorInfo));
-        monitorInfo.cbSize = sizeof(monitorInfo);
+        MONITORINFO monitorInfo;
+        memset(&monitorInfo, 0, sizeof(MONITORINFO));
+        monitorInfo.cbSize = sizeof(MONITORINFO);
         GetMonitorInfo(hMonitor, &monitorInfo);
 
         if (fullScreen)
@@ -1095,31 +1095,8 @@ namespace Ogre
             mode.Width = width;
             mode.Height = height;
             mode.Format = _getSwapChainFormat();
-            mode.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-
-            // Ask for the refresh rate the desktop is currently using. With 0/0 DXGI may pick another
-            // rate, which is a real video mode change and makes Windows rearrange all the windows.
-            DEVMODE dm;
-            memset(&dm, 0, sizeof(dm));
-            dm.dmSize = sizeof(dm);
-            if (EnumDisplaySettings(monitorInfo.szDevice, ENUM_CURRENT_SETTINGS, &dm) && dm.dmDisplayFrequency > 1)
-            {
-                mode.RefreshRate.Numerator = dm.dmDisplayFrequency;
-                mode.RefreshRate.Denominator = 1;
-            }
-
-            ComPtr<IDXGIOutput> output;
-            DXGI_MODE_DESC closest = mode;
-            if (SUCCEEDED(mpSwapChain->GetContainingOutput(output.GetAddressOf())) &&
-                SUCCEEDED(output->FindClosestMatchingMode(&mode, &closest, NULL)))
-            {
-                mode = closest;
-            }
-            LogManager::getSingleton().logMessage(
-                "D3D11: fullscreen mode " + StringConverter::toString(mode.Width) + "x" +
-                StringConverter::toString(mode.Height) + " @ " +
-                StringConverter::toString(mode.RefreshRate.Denominator ? mode.RefreshRate.Numerator / (float)mode.RefreshRate.Denominator : 0.f) + "Hz");
-
+            mode.RefreshRate.Numerator = 0;
+            mode.RefreshRate.Denominator = 0;
             mpSwapChain->ResizeTarget(&mode);
             _resizeSwapChainBuffers(width, height);
         }
