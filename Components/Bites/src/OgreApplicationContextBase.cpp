@@ -33,6 +33,7 @@ static const char* SHADER_CACHE_FILENAME = "cache.bin";
 ApplicationContextBase::ApplicationContextBase(const Ogre::String& appName)
 {
     mAppName = appName;
+    mConfigFileName = "ogre.cfg";
     mFSLayer = new Ogre::FileSystemLayer(mAppName);
 
     if (char* val = getenv("OGRE_CONFIG_DIR"))
@@ -181,6 +182,11 @@ void ApplicationContextBase::setup()
     mRoot->addFrameListener(this);
 }
 
+Ogre::String ApplicationContextBase::getConfigFilePath() const
+{
+    return mFSLayer->getWritablePath(mConfigFileName);
+}
+
 void ApplicationContextBase::createRoot()
 {
 #if OGRE_PLATFORM == OGRE_PLATFORM_ANDROID
@@ -196,7 +202,7 @@ void ApplicationContextBase::createRoot()
     }
 #   endif
 
-    mRoot = OGRE_NEW Ogre::Root(pluginsPath, mFSLayer->getWritablePath("ogre.cfg"),
+    mRoot = OGRE_NEW Ogre::Root(pluginsPath, getConfigFilePath(),
                                 mFSLayer->getWritablePath("ogre.log"));
 #endif
 

@@ -243,6 +243,21 @@ namespace Ogre
         */
         bool restoreConfig(void);
 
+        /** Path of the settings file used by saveConfig() and restoreConfig()
+
+            Empty if no settings file is used. This is the value passed to the constructor,
+            unless a platform specific location had to be used instead.
+        */
+        const String& getConfigFileName() const { return mConfigFileName; }
+
+        /** Deletes the saved settings file, so the next restoreConfig() finds nothing
+            and the application falls back to its defaults (e.g. the config dialog)
+
+            @return <b>true</b> if the file was deleted or did not exist,
+                <b>false</b> if there is no settings file configured or it could not be removed.
+        */
+        bool deleteConfig(void);
+
         /** Displays a dialog asking the user to choose system settings.
 
             This method displays the default dialog allowing the user to

@@ -27,6 +27,7 @@ THE SOFTWARE.
 */
 // Ogre includes
 #include <memory>
+#include <cstdio>
 
 #include "OgreStableHeaders.h"
 
@@ -429,6 +430,18 @@ namespace Ogre {
 
         // Successful load
         return !optionError;
+    }
+
+    //-----------------------------------------------------------------------
+    bool Root::deleteConfig(void)
+    {
+        if (mConfigFileName.empty())
+            return false;
+
+        if (!std::ifstream(mConfigFileName.c_str()).is_open())
+            return true; // nothing to delete
+
+        return std::remove(mConfigFileName.c_str()) == 0;
     }
 
     //-----------------------------------------------------------------------

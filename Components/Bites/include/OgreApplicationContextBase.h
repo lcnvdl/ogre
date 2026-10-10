@@ -285,6 +285,20 @@ namespace OgreBites
         Ogre::FileSystemLayer& getFSLayer() const { return *mFSLayer; }
 
         /**
+         * set the name of the settings file (default "ogre.cfg")
+         *
+         * It is stored in the application specific writable directory, see getConfigFilePath().
+         * Must be called before initApp(), as the file is read when the Root is created.
+         */
+        void setConfigFileName(const Ogre::String& name) { mConfigFileName = name; }
+
+        /// the name of the settings file, see setConfigFileName()
+        const Ogre::String& getConfigFileName() const { return mConfigFileName; }
+
+        /// full path where the settings file is read from and saved to. Valid before initApp().
+        Ogre::String getConfigFilePath() const;
+
+        /**
          * the directory where the media files were installed
          *
          * same as OGRE_MEDIA_DIR in CMake
@@ -309,6 +323,7 @@ namespace OgreBites
         bool mFirstRun;
         Ogre::String mNextRenderer;     // name of renderer used for next run
         Ogre::String mAppName;
+        Ogre::String mConfigFileName;
 
         typedef std::vector<NativeWindowPair> WindowList;
         WindowList mWindows; // all windows
