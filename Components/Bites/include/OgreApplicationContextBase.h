@@ -299,6 +299,15 @@ namespace OgreBites
         Ogre::String getConfigFilePath() const;
 
         /**
+         * show the native setup dialog and, if the user accepts it, save the settings file
+         *
+         * Can be called at any time after the Root is created. Most options (render system,
+         * resolution, etc.) only take effect the next time the application starts.
+         * @return false if the dialog was cancelled or is not available on this platform
+         */
+        bool showConfigDialog();
+
+        /**
          * the directory where the media files were installed
          *
          * same as OGRE_MEDIA_DIR in CMake

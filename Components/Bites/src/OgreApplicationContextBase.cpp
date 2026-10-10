@@ -230,6 +230,18 @@ bool ApplicationContextBase::oneTimeConfig()
     return true;
 }
 
+bool ApplicationContextBase::showConfigDialog()
+{
+    if(!mRoot || !OgreBites::getNativeConfigDialog())
+        return false;
+
+    if(!mRoot->showConfigDialog(OgreBites::getNativeConfigDialog()))
+        return false;
+
+    mRoot->saveConfig();
+    return true;
+}
+
 void ApplicationContextBase::createDummyScene()
 {
     mWindows[0].render->removeAllViewports();
