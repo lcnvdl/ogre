@@ -68,6 +68,7 @@ namespace Ogre {
                         const NameValuePairList* miscParams) override;
 
             void setFullscreen (bool fullscreen, uint width, uint height) override;
+            void setFullscreenMode(FullscreenMode mode, uint width, uint height) override;
             void destroy(void) override;
             void swapBuffers() override;
             void setVSyncEnabled(bool vsync) override;

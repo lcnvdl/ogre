@@ -48,7 +48,10 @@ namespace Ogre
         
         /** @copydoc see RenderWindow::setFullscreen */
         void setFullscreen (bool fullscreen, uint width, uint height);
-        
+
+        /** @copydoc see RenderWindow::setFullscreenMode */
+        void setFullscreenMode(FullscreenMode mode, uint width, uint height) override;
+
         /** @copydoc see RenderWindow::destroy */
         void destroy(void);
         

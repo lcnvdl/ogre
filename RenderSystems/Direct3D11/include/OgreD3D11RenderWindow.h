@@ -173,6 +173,7 @@ namespace Ogre
         void reposition(int left, int top);
         void resize(unsigned int width, unsigned int height);
         void setFullscreen(bool fullScreen, unsigned int width, unsigned int height);
+        void setFullscreenMode(FullscreenMode mode, unsigned int width, unsigned int height) override;
 
         // Method for dealing with resize / move & 3d library
         void windowMovedOrResized();
@@ -194,6 +195,11 @@ namespace Ogre
         void _finishSwitchingFullscreen();
         void setActive(bool state);
 
+        /// Remember the window styles and placement before entering fullscreen
+        void _saveWindowedState();
+        /// Bring back the state saved by _saveWindowedState(), sized for mDesiredWidth x mDesiredHeight
+        void _restoreWindowedState();
+
     protected:
         HWND                    mHWnd;                          // Win32 window handle
         DWORD                   mWindowedWinStyle;              // Windowed mode window style flags.
@@ -201,6 +207,10 @@ namespace Ogre
         unsigned int            mDesiredWidth;                  // Desired width after resizing
         unsigned int            mDesiredHeight;                 // Desired height after resizing
         int                     mLastSwitchingFullscreenCounter;// the last value of the switching fullscreen counter when we switched
+        bool                    mHasSavedWindowedState;         // Whether the fields below hold the state before fullscreen
+        DWORD                   mSavedWinStyle;                 // Window style before entering fullscreen
+        DWORD                   mSavedWinStyleEx;               // Extended window style before entering fullscreen
+        RECT                    mSavedWindowRect;               // Outer window rect before entering fullscreen
     };
 
 #endif

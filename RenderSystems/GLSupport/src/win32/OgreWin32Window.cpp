@@ -57,6 +57,9 @@ namespace Ogre {
         mDeviceName = NULL;
         mWindowedWinStyle = 0;
         mFullscreenWinStyle = 0;
+        mSavedWinStyle = 0;
+        mSavedWinStyleEx = 0;
+        SetRectEmpty(&mSavedWindowRect);
     }
 
     Win32Window::~Win32Window()
@@ -611,6 +614,80 @@ namespace Ogre {
         }
     }
 
+    void Win32Window::setFullscreenMode(FullscreenMode mode, unsigned int width, unsigned int height)
+    {
+        const FullscreenMode oldMode = getFullscreenMode();
+        if (oldMode != FSM_BORDERLESS && mode != FSM_BORDERLESS)
+        {
+            setFullscreen(mode == FSM_EXCLUSIVE, width, height);
+            return;
+        }
+        if (mode == oldMode || !mHWnd)
+            return;
+
+        if (mode == FSM_BORDERLESS)
+        {
+            // leave the exclusive display mode first, the borderless window keeps the desktop one
+            if (oldMode == FSM_EXCLUSIVE)
+                setFullscreen(false, mWidth, mHeight);
+            enterBorderlessFullscreen();
+        }
+        else
+        {
+            leaveBorderlessFullscreen(mode == FSM_WINDOWED ? width : 0, mode == FSM_WINDOWED ? height : 0);
+            if (mode == FSM_EXCLUSIVE)
+                setFullscreen(true, width, height);
+        }
+    }
+
+    void Win32Window::enterBorderlessFullscreen()
+    {
+        mSavedWinStyle = GetWindowLong(mHWnd, GWL_STYLE);
+        mSavedWinStyleEx = GetWindowLong(mHWnd, GWL_EXSTYLE);
+        GetWindowRect(mHWnd, &mSavedWindowRect);
+
+        HMONITOR hMonitor = MonitorFromWindow(mHWnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO monitorInfo;
+        memset(&monitorInfo, 0, sizeof(MONITORINFO));
+        monitorInfo.cbSize = sizeof(MONITORINFO);
+        GetMonitorInfo(hMonitor, &monitorInfo);
+        const RECT& monitorRect = monitorInfo.rcMonitor;
+
+        const DWORD decorations = WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+        const DWORD exDecorations = WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE;
+        SetWindowLong(mHWnd, GWL_STYLE, (mSavedWinStyle & ~decorations) | WS_POPUP);
+        SetWindowLong(mHWnd, GWL_EXSTYLE, mSavedWinStyleEx & ~exDecorations);
+
+        mIsFullScreen = true;
+        mIsBorderlessFullScreen = true;
+        SetWindowPos(mHWnd, HWND_NOTOPMOST, monitorRect.left, monitorRect.top,
+                     monitorRect.right - monitorRect.left, monitorRect.bottom - monitorRect.top,
+                     SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        updateWindowRect();
+    }
+
+    void Win32Window::leaveBorderlessFullscreen(unsigned int width, unsigned int height)
+    {
+        SetWindowLong(mHWnd, GWL_STYLE, mSavedWinStyle);
+        SetWindowLong(mHWnd, GWL_EXSTYLE, mSavedWinStyleEx);
+
+        int windowWidth = mSavedWindowRect.right - mSavedWindowRect.left;
+        int windowHeight = mSavedWindowRect.bottom - mSavedWindowRect.top;
+        if (width != 0 && height != 0)
+        {
+            RECT rc = { 0, 0, int(width), int(height) };
+            AdjustWindowRectEx(&rc, mSavedWinStyle, FALSE, mSavedWinStyleEx);
+            windowWidth = rc.right - rc.left;
+            windowHeight = rc.bottom - rc.top;
+        }
+
+        mIsFullScreen = false;
+        mIsBorderlessFullScreen = false;
+        SetWindowPos(mHWnd, HWND_NOTOPMOST, mSavedWindowRect.left, mSavedWindowRect.top, windowWidth, windowHeight,
+                     SWP_DRAWFRAME | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+        updateWindowRect();
+    }
+
     void Win32Window::destroy(void)
     {
         if (!mHWnd)
@@ -627,7 +704,7 @@ namespace Ogre {
         }
         if (!mIsExternal)
         {
-            if (mIsFullScreen)
+            if (getFullscreenMode() == FSM_EXCLUSIVE)
                 ChangeDisplaySettingsEx(mDeviceName, NULL, NULL, 0, NULL);
             DestroyWindow(mHWnd);
         }
@@ -816,7 +893,8 @@ namespace Ogre {
         
         mActive = state;
 
-        if( mIsFullScreen )
+        // a borderless fullscreen window never changed the display mode
+        if( getFullscreenMode() == FSM_EXCLUSIVE )
         {
             if( state == false )
             {   //Restore Desktop

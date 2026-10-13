@@ -42,6 +42,7 @@ namespace Ogre {
         void create(const String& name, unsigned int width, unsigned int height,
             bool fullScreen, const NameValuePairList *miscParams);
         void setFullscreen(bool fullScreen, unsigned int width, unsigned int height);
+        void setFullscreenMode(FullscreenMode mode, unsigned int width, unsigned int height) override;
         void destroy(void);
         bool isActive(void) const;
         bool isVisible() const;
@@ -76,6 +77,11 @@ namespace Ogre {
         /** Return the target window style depending on the fullscreen parameter. */
         DWORD getWindowStyle(bool fullScreen) const { if (fullScreen) return mFullscreenWinStyle; return mWindowedWinStyle; }
 
+        /** Turn the window into a borderless one covering its monitor, remembering the windowed state. */
+        void enterBorderlessFullscreen();
+        /** Restore the state saved by enterBorderlessFullscreen(), with the given client size if not 0. */
+        void leaveBorderlessFullscreen(unsigned int width, unsigned int height);
+
     protected:
         Win32GLSupport &mGLSupport;
         HWND    mHWnd;                  // Win32 Window handle
@@ -88,6 +94,9 @@ namespace Ogre {
         uint32  mColourDepth;
         DWORD   mWindowedWinStyle;      // Windowed mode window style flags.
         DWORD   mFullscreenWinStyle;    // Fullscreen mode window style flags.
+        DWORD   mSavedWinStyle;         // Window style before entering borderless fullscreen.
+        DWORD   mSavedWinStyleEx;       // Extended window style before entering borderless fullscreen.
+        RECT    mSavedWindowRect;       // Outer window rect before entering borderless fullscreen.
     };
 }
 

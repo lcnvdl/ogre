@@ -398,7 +398,7 @@ namespace Ogre
     //---------------------------------------------------------------------
     void D3D11RenderWindowSwapChainBased::_destroySwapChain()
     {
-        if(mIsFullScreen && mpSwapChain)
+        if(getFullscreenMode() == FSM_EXCLUSIVE && mpSwapChain)
             mpSwapChain->SetFullscreenState(false, NULL); // get back from fullscreen
 
         mpSwapChain.Reset();
@@ -516,7 +516,15 @@ namespace Ogre
         mpSwapChain->GetDesc(&mSwapChainDesc);
         mWidth = mSwapChainDesc.BufferDesc.Width;
         mHeight = mSwapChainDesc.BufferDesc.Height;
-        mIsFullScreen = (0 == mSwapChainDesc.Windowed); // Alt-Enter together with SetWindowAssociation() can change this state
+        // Alt-Enter together with SetWindowAssociation() can change this state; for DXGI a
+        // borderless fullscreen window is a regular window
+        if (0 == mSwapChainDesc.Windowed)
+        {
+            mIsFullScreen = true;
+            mIsBorderlessFullScreen = false;
+        }
+        else
+            mIsFullScreen = mIsBorderlessFullScreen;
 #elif OGRE_PLATFORM == OGRE_PLATFORM_WINRT
         mpSwapChain->GetDesc1(&mSwapChainDesc);
         mWidth = mSwapChainDesc.Width;
@@ -574,7 +582,8 @@ namespace Ogre
 	//---------------------------------------------------------------------
 	int D3D11RenderWindowSwapChainBased::getVBlankMissCount()
 	{
-		if (!(mIsFullScreen || (!mIsFullScreen && isVSyncEnabled() && mUseFlipMode == true && mFSAA == 0)))
+		const bool isExclusive = getFullscreenMode() == FSM_EXCLUSIVE;
+		if (!(isExclusive || (isVSyncEnabled() && mUseFlipMode == true && mFSAA == 0)))
 		{
 			return -1;
 		}
@@ -617,6 +626,10 @@ namespace Ogre
 		mDesiredWidth = 0;
 		mDesiredHeight = 0;
 		mLastSwitchingFullscreenCounter = 0;
+        mHasSavedWindowedState = false;
+        mSavedWinStyle = 0;
+        mSavedWinStyleEx = 0;
+        SetRectEmpty(&mSavedWindowRect);
     }
     //---------------------------------------------------------------------
     void D3D11RenderWindowHwnd::create(const String& name, unsigned int width, unsigned int height,
@@ -830,7 +843,9 @@ namespace Ogre
 
         _createSwapChain();
         _createSizeDependedD3DResources();
-        mDevice.GetDXGIFactory()->MakeWindowAssociation(mHWnd, 0);
+        // DXGI's own Alt+Enter switches the swap chain behind Ogre's back (possibly on another
+        // monitor and without resizing the buffers); applications use setFullscreen instead.
+        mDevice.GetDXGIFactory()->MakeWindowAssociation(mHWnd, DXGI_MWA_NO_ALT_ENTER);
         setHidden(mHidden);
 
         D3D11RenderSystem* rsys = static_cast<D3D11RenderSystem*>(Root::getSingleton().getRenderSystem());
@@ -852,7 +867,7 @@ namespace Ogre
     void D3D11RenderWindowHwnd::notifyDeviceRestored(D3D11Device* device)
     {
         D3D11RenderWindowSwapChainBased::notifyDeviceRestored(device);
-        mDevice.GetDXGIFactory()->MakeWindowAssociation(mHWnd, 0);
+        mDevice.GetDXGIFactory()->MakeWindowAssociation(mHWnd, DXGI_MWA_NO_ALT_ENTER);
     }
     //---------------------------------------------------------------------
 	HRESULT D3D11RenderWindowHwnd::_createSwapChainImpl(IDXGIDeviceN* pDXGIDevice)
@@ -895,10 +910,10 @@ namespace Ogre
 
         mSwapChainDesc.BufferUsage          = DXGI_USAGE_RENDER_TARGET_OUTPUT;
         mSwapChainDesc.OutputWindow         = mHWnd;
-        mSwapChainDesc.Windowed             = !mIsFullScreen;
+        mSwapChainDesc.Windowed             = getFullscreenMode() != FSM_EXCLUSIVE;
         mSwapChainDesc.Flags                = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
-        if (!mVSync && !mIsFullScreen)
+        if (!mVSync && mSwapChainDesc.Windowed)
         {
             // NB not using vsync in windowed mode in D3D11 can cause jerking at low 
             // frame rates no matter what buffering modes are used (odd - perhaps a
@@ -1028,7 +1043,13 @@ namespace Ogre
     //---------------------------------------------------------------------
     void D3D11RenderWindowHwnd::setFullscreen(bool fullScreen, unsigned int width, unsigned int height)
     {
-        if (fullScreen == mIsFullScreen && width == mWidth && height == mHeight)
+        setFullscreenMode(fullScreen ? FSM_EXCLUSIVE : FSM_WINDOWED, width, height);
+    }
+    //---------------------------------------------------------------------
+    void D3D11RenderWindowHwnd::setFullscreenMode(FullscreenMode mode, unsigned int width, unsigned int height)
+    {
+        const FullscreenMode oldMode = getFullscreenMode();
+        if (mode == oldMode && (mode == FSM_BORDERLESS || (width == mWidth && height == mHeight)))
             return;
         if (!mHWnd || !mpSwapChain)
             return;
@@ -1037,40 +1058,79 @@ namespace Ogre
         // does it on startup, so window, swap chain and back buffers are never out of sync.
         D3D11RenderSystem* rsys = static_cast<D3D11RenderSystem*>(Root::getSingleton().getRenderSystem());
 
-        const bool oldFullscreen = mIsFullScreen;
+        // remember the windowed size, styles and placement to restore them when leaving fullscreen
+        if (oldMode == FSM_WINDOWED)
+        {
+            mDesiredWidth = mWidth;
+            mDesiredHeight = mHeight;
+            _saveWindowedState();
+        }
 
-        HMONITOR hMonitor = MonitorFromWindow(mHWnd, MONITOR_DEFAULTTONEAREST);
+        // leave DXGI fullscreen first, only then touch the window
+        if (oldMode == FSM_EXCLUSIVE && mode != FSM_EXCLUSIVE)
+            mpSwapChain->SetFullscreenState(FALSE, NULL);
+
+        // the monitor the window was on before any fullscreen switch; asking for the monitor of an
+        // exclusive fullscreen window is unreliable (with hybrid GPUs it can report a different one)
+        HMONITOR hMonitor = mHasSavedWindowedState ? MonitorFromRect(&mSavedWindowRect, MONITOR_DEFAULTTONEAREST)
+                                                   : MonitorFromWindow(mHWnd, MONITOR_DEFAULTTONEAREST);
         MONITORINFO monitorInfo;
         memset(&monitorInfo, 0, sizeof(MONITORINFO));
         monitorInfo.cbSize = sizeof(MONITORINFO);
         GetMonitorInfo(hMonitor, &monitorInfo);
+        const RECT& monitorRect = monitorInfo.rcMonitor;
 
-        if (fullScreen)
+        if (mode == FSM_WINDOWED)
+        {
+            if (width != 0 && height != 0)
+            {
+                mDesiredWidth = width;
+                mDesiredHeight = height;
+            }
+
+            mIsFullScreen = false;
+            mIsBorderlessFullScreen = false;
+            _restoreWindowedState();
+            RenderWindow::resize(mWidth, mHeight);
+        }
+        else if (mode == FSM_BORDERLESS)
+        {
+            // a regular window without decorations covering the monitor: DXGI keeps presenting
+            // through the desktop compositor, so the video mode and the output never change
+            const DWORD decorations = WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+            const DWORD exDecorations = WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE;
+            SetWindowLong(mHWnd, GWL_STYLE, (GetWindowLong(mHWnd, GWL_STYLE) & ~decorations) | WS_POPUP);
+            SetWindowLong(mHWnd, GWL_EXSTYLE, GetWindowLong(mHWnd, GWL_EXSTYLE) & ~exDecorations);
+
+            mIsFullScreen = true;
+            mIsBorderlessFullScreen = true;
+            SetWindowRgn(mHWnd, NULL, FALSE);
+            SetWindowPos(mHWnd, HWND_NOTOPMOST, monitorRect.left, monitorRect.top,
+                         monitorRect.right - monitorRect.left, monitorRect.bottom - monitorRect.top,
+                         SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            updateWindowRect(); // resizes the swap chain buffers to the monitor size
+            RenderWindow::resize(mWidth, mHeight);
+        }
+        else
         {
             if (width == 0 || height == 0)
             {
-                width = monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left;
-                height = monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top;
-            }
-
-            // remember the windowed size to restore it when leaving fullscreen
-            if (!oldFullscreen)
-            {
-                mDesiredWidth = mWidth;
-                mDesiredHeight = mHeight;
+                width = monitorRect.right - monitorRect.left;
+                height = monitorRect.bottom - monitorRect.top;
             }
 
             mIsFullScreen = true;
-            mLeft = monitorInfo.rcMonitor.left;
-            mTop = monitorInfo.rcMonitor.top;
+            mIsBorderlessFullScreen = false;
+            mLeft = monitorRect.left;
+            mTop = monitorRect.top;
 
-            if (!oldFullscreen && !mIsExternal)
+            if (oldMode == FSM_WINDOWED && !mIsExternal)
                 SetWindowLong(mHWnd, GWL_STYLE, getWindowStyle(true));
             SetWindowRgn(mHWnd, NULL, FALSE);
             SetWindowPos(mHWnd, HWND_TOPMOST, mLeft, mTop, width, height,
-                         SWP_NOACTIVATE | SWP_SHOWWINDOW | (oldFullscreen ? 0 : SWP_FRAMECHANGED));
+                         SWP_NOACTIVATE | SWP_SHOWWINDOW | (oldMode == FSM_EXCLUSIVE ? 0 : SWP_FRAMECHANGED));
 
-            if (!oldFullscreen)
+            if (oldMode != FSM_EXCLUSIVE)
             {
                 HRESULT hr = mpSwapChain->SetFullscreenState(TRUE, NULL);
                 if (FAILED(hr))
@@ -1079,53 +1139,22 @@ namespace Ogre
                         "D3D11: SetFullscreenState(TRUE) failed, hr=" + StringConverter::toString((int)hr));
                     // roll back to windowed
                     mIsFullScreen = false;
-                    SetWindowLong(mHWnd, GWL_STYLE, getWindowStyle(false));
-                    unsigned int winWidth, winHeight;
-                    adjustWindow(mDesiredWidth, mDesiredHeight, &winWidth, &winHeight);
-                    SetWindowPos(mHWnd, HWND_NOTOPMOST, 0, 0, winWidth, winHeight,
-                                 SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOACTIVATE);
-                    updateWindowRect();
+                    _restoreWindowedState();
+                    RenderWindow::resize(mWidth, mHeight);
                     return;
                 }
             }
 
             // tell DXGI the desired display mode, then resize the buffers to match
-            DXGI_MODE_DESC mode;
-            ZeroMemory(&mode, sizeof(mode));
-            mode.Width = width;
-            mode.Height = height;
-            mode.Format = _getSwapChainFormat();
-            mode.RefreshRate.Numerator = 0;
-            mode.RefreshRate.Denominator = 0;
-            mpSwapChain->ResizeTarget(&mode);
+            DXGI_MODE_DESC displayMode;
+            ZeroMemory(&displayMode, sizeof(displayMode));
+            displayMode.Width = width;
+            displayMode.Height = height;
+            displayMode.Format = _getSwapChainFormat();
+            displayMode.RefreshRate.Numerator = 0;
+            displayMode.RefreshRate.Denominator = 0;
+            mpSwapChain->ResizeTarget(&displayMode);
             _resizeSwapChainBuffers(width, height);
-        }
-        else
-        {
-            if (width != 0 && height != 0)
-            {
-                mDesiredWidth = width;
-                mDesiredHeight = height;
-            }
-
-            // leave DXGI fullscreen first, only then touch the window
-            if (oldFullscreen)
-                mpSwapChain->SetFullscreenState(FALSE, NULL);
-            mIsFullScreen = false;
-
-            unsigned int winWidth, winHeight;
-            adjustWindow(mDesiredWidth, mDesiredHeight, &winWidth, &winHeight);
-            const int screenw = monitorInfo.rcWork.right - monitorInfo.rcWork.left;
-            const int screenh = monitorInfo.rcWork.bottom - monitorInfo.rcWork.top;
-            const int left = monitorInfo.rcWork.left + (screenw > (int)winWidth ? (screenw - (int)winWidth) / 2 : 0);
-            const int top = monitorInfo.rcWork.top + (screenh > (int)winHeight ? (screenh - (int)winHeight) / 2 : 0);
-
-            SetWindowRgn(mHWnd, NULL, FALSE);
-            if (!mIsExternal)
-                SetWindowLong(mHWnd, GWL_STYLE, getWindowStyle(false));
-            SetWindowPos(mHWnd, HWND_NOTOPMOST, left, top, winWidth, winHeight,
-                         SWP_DRAWFRAME | SWP_FRAMECHANGED | SWP_NOACTIVATE);
-            updateWindowRect(); // resizes the swap chain buffers if the client area changed
             RenderWindow::resize(mWidth, mHeight);
         }
 
@@ -1138,23 +1167,81 @@ namespace Ogre
 	{
 		RECT rc;
 		SetRect(&rc, 0, 0, clientWidth, clientHeight);
-		AdjustWindowRect(&rc, getWindowStyle(mIsFullScreen), false);
+		// external windows (e.g. SDL) keep their own styles, mWindowedWinStyle is only set for windows we create
+		if (mHWnd)
+			AdjustWindowRectEx(&rc, GetWindowLong(mHWnd, GWL_STYLE), FALSE, GetWindowLong(mHWnd, GWL_EXSTYLE));
+		else
+			AdjustWindowRect(&rc, getWindowStyle(mIsFullScreen), false);
 		*winWidth = rc.right - rc.left;
 		*winHeight = rc.bottom - rc.top;
 	}
+    //---------------------------------------------------------------------
+    void D3D11RenderWindowHwnd::_saveWindowedState()
+    {
+        mSavedWinStyle = GetWindowLong(mHWnd, GWL_STYLE);
+        mSavedWinStyleEx = GetWindowLong(mHWnd, GWL_EXSTYLE);
+        GetWindowRect(mHWnd, &mSavedWindowRect);
+        mHasSavedWindowedState = true;
+    }
+    //---------------------------------------------------------------------
+    void D3D11RenderWindowHwnd::_restoreWindowedState()
+    {
+        // DXGI strips the frame when going fullscreen, so put back the styles the window had
+        if (mHasSavedWindowedState)
+        {
+            SetWindowLong(mHWnd, GWL_STYLE, mSavedWinStyle);
+            SetWindowLong(mHWnd, GWL_EXSTYLE, mSavedWinStyleEx);
+        }
+        else if (!mIsExternal)
+        {
+            SetWindowLong(mHWnd, GWL_STYLE, getWindowStyle(false));
+        }
+
+        unsigned int winWidth, winHeight;
+        adjustWindow(mDesiredWidth, mDesiredHeight, &winWidth, &winHeight);
+
+        // go back to where the window was; asking which monitor holds a fullscreen window
+        // is unreliable (with hybrid GPUs it can report a different one)
+        int left, top;
+        if (mHasSavedWindowedState)
+        {
+            left = mSavedWindowRect.left;
+            top = mSavedWindowRect.top;
+        }
+        else
+        {
+            HMONITOR hMonitor = MonitorFromWindow(mHWnd, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO monitorInfo;
+            memset(&monitorInfo, 0, sizeof(MONITORINFO));
+            monitorInfo.cbSize = sizeof(MONITORINFO);
+            GetMonitorInfo(hMonitor, &monitorInfo);
+            const int screenw = monitorInfo.rcWork.right - monitorInfo.rcWork.left;
+            const int screenh = monitorInfo.rcWork.bottom - monitorInfo.rcWork.top;
+            left = monitorInfo.rcWork.left + (screenw > (int)winWidth ? (screenw - (int)winWidth) / 2 : 0);
+            top = monitorInfo.rcWork.top + (screenh > (int)winHeight ? (screenh - (int)winHeight) / 2 : 0);
+        }
+        mHasSavedWindowedState = false;
+
+        SetWindowRgn(mHWnd, NULL, FALSE);
+        SetWindowPos(mHWnd, HWND_NOTOPMOST, left, top, winWidth, winHeight,
+                     SWP_DRAWFRAME | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+        updateWindowRect(); // resizes the swap chain buffers if the client area changed
+    }
 
     void D3D11RenderWindowHwnd::_finishSwitchingFullscreen()
     {
-        if(mIsFullScreen)
+        // borderless fullscreen is a regular window for DXGI, only exclusive fullscreen needs syncing
+        const bool isExclusive = getFullscreenMode() == FSM_EXCLUSIVE;
+        if(isExclusive)
         {
             // Need to reset the region on the window sometimes, when the 
             // windowed mode was constrained by desktop 
 			HRGN hRgn = CreateRectRgn(0,0,mSwapChainDesc.BufferDesc.Width, mSwapChainDesc.BufferDesc.Height);
 			SetWindowRgn(mHWnd, hRgn, FALSE);
         }
-        else
+        else if(!mIsFullScreen)
         {
-            // When switching back to windowed mode, need to reset window size 
+            // When switching back to windowed mode, need to reset window size
             // after device has been restored
 			if (mWidth != mDesiredWidth ||
 				mHeight != mDesiredHeight)
@@ -1183,9 +1270,9 @@ namespace Ogre
 		DXGI_SWAP_CHAIN_DESC dsc;
 		ZeroMemory(&dsc, sizeof(dsc));
 		mpSwapChain->GetDesc(&dsc);
-		if((dsc.Windowed != 0) == mIsFullScreen)
+		if((dsc.Windowed != 0) == isExclusive)
 		{
-            mpSwapChain->SetFullscreenState(mIsFullScreen, NULL);
+            mpSwapChain->SetFullscreenState(isExclusive, NULL);
 		}
 		D3D11RenderSystem* rsys = static_cast<D3D11RenderSystem*>(Root::getSingleton().getRenderSystem());
 		mLastSwitchingFullscreenCounter = rsys->getSwitchingFullscreenCounter();
@@ -1240,7 +1327,7 @@ namespace Ogre
 		mpSwapChain->GetDesc(&dsc);
 		D3D11RenderSystem* rsys = static_cast<D3D11RenderSystem*>(Root::getSingleton().getRenderSystem());
 		if(rsys->getSwitchingFullscreenCounter() > mLastSwitchingFullscreenCounter 
-			|| GetFocus() == mHWnd && ((dsc.Windowed != 0) == mIsFullScreen))
+			|| GetFocus() == mHWnd && ((dsc.Windowed != 0) == (getFullscreenMode() == FSM_EXCLUSIVE)))
 		{
 			_finishSwitchingFullscreen();		
 		}
@@ -1248,7 +1335,7 @@ namespace Ogre
 	}
 	void D3D11RenderWindowHwnd::setActive(bool state)
 	{
-		if (mHWnd && mpSwapChain && mIsFullScreen && state)
+		if (mHWnd && mpSwapChain && getFullscreenMode() == FSM_EXCLUSIVE && state)
 		{
 			DXGI_SWAP_CHAIN_DESC dsc;
 			ZeroMemory(&dsc, sizeof(dsc));

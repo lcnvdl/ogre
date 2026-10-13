@@ -114,6 +114,46 @@ namespace Ogre {
         }
     }
 
+    void EGLWindow::setFullscreenMode(FullscreenMode mode, uint width, uint height)
+    {
+        const FullscreenMode oldMode = getFullscreenMode();
+        if (mode != FSM_BORDERLESS && oldMode != FSM_BORDERLESS)
+        {
+            setFullscreen(mode == FSM_EXCLUSIVE, width, height);
+            return;
+        }
+
+        if (mode == oldMode || mClosed || !mIsTopLevel)
+        {
+            return;
+        }
+
+        // borderless is the windowing system fullscreen state without changing the video mode
+        if (mode == FSM_BORDERLESS)
+        {
+            if (oldMode == FSM_EXCLUSIVE)
+            {
+                mGLSupport->switchMode();
+            }
+            else
+            {
+                switchFullScreen(true);
+            }
+            mIsBorderlessFullScreen = mIsFullScreen;
+        }
+        else if (mode == FSM_EXCLUSIVE)
+        {
+            short frequency = 0;
+            mGLSupport->switchMode(width, height, frequency);
+            mIsBorderlessFullScreen = false;
+        }
+        else
+        {
+            mIsBorderlessFullScreen = false;
+            setFullscreen(false, width, height);
+        }
+    }
+
     void EGLWindow::swapBuffers()
     {
         if (mClosed || mIsExternalGLControl)

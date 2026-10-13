@@ -764,4 +764,11 @@ namespace Ogre {
             mHeight = heightPx;
         }
     }
+
+    void CocoaWindow::setFullscreenMode(FullscreenMode mode, unsigned int widthPt, unsigned int heightPt)
+    {
+        // Cocoa fullscreen is always a borderless window covering the screen, the video mode never changes
+        setFullscreen(mode != FSM_WINDOWED, widthPt, heightPt);
+        mIsBorderlessFullScreen = mIsFullScreen;
+    }
 }

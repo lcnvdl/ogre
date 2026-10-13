@@ -61,6 +61,17 @@ namespace Ogre
     {
 
     public:
+        /// How the window covers the screen, see setFullscreenMode()
+        enum FullscreenMode
+        {
+            /// Regular window with the decorations of the windowing system
+            FSM_WINDOWED,
+            /// The window takes over the display, which may change its video mode
+            FSM_EXCLUSIVE,
+            /// A window without decorations covering the monitor that contains it; the video mode is not changed
+            FSM_BORDERLESS
+        };
+
         /** Default constructor.
         */
         RenderWindow();
@@ -114,7 +125,23 @@ namespace Ogre
         */
         virtual void setFullscreen(bool fullScreen, unsigned int widthPt, unsigned int heightPt)
                 { (void)fullScreen; (void)widthPt; (void)heightPt; }
-        
+
+        /** Switch between windowed, exclusive fullscreen and borderless fullscreen.
+        Nothing will happen unless the settings here are different from the
+            current settings.
+        @note RenderSystems without a borderless implementation fall back to
+            setFullscreen(mode != FSM_WINDOWED, widthPt, heightPt).
+        @param mode The new mode
+        @param widthPt The new width to use. In FSM_BORDERLESS the window always covers
+            its monitor, so this is ignored. In FSM_EXCLUSIVE, 0 uses the monitor size.
+        @param heightPt The new height to use, see widthPt
+        */
+        virtual void setFullscreenMode(FullscreenMode mode, unsigned int widthPt, unsigned int heightPt);
+
+        /** Returns the current fullscreen mode
+        */
+        FullscreenMode getFullscreenMode() const;
+
         /** Destroys the window.
         */
         virtual void destroy(void) = 0;
@@ -223,6 +250,8 @@ namespace Ogre
 
     protected:
         bool mIsFullScreen;
+        /// Whether the fullscreen state (mIsFullScreen) is borderless instead of exclusive
+        bool mIsBorderlessFullScreen;
         bool mIsPrimary;
         bool mAutoDeactivatedOnFocusChange;
         bool mClosed;

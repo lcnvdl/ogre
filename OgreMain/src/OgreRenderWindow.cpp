@@ -32,7 +32,8 @@ THE SOFTWARE.
 namespace Ogre {
 
     RenderWindow::RenderWindow()
-        : RenderTarget(), mIsFullScreen(false), mIsPrimary(false), mClosed(false), mLeft(0), mTop(0), mVSyncInterval(1)
+        : RenderTarget(), mIsFullScreen(false), mIsBorderlessFullScreen(false), mIsPrimary(false), mClosed(false),
+          mLeft(0), mTop(0), mVSyncInterval(1)
     {
         mAutoDeactivatedOnFocusChange = true;
     }
@@ -60,6 +61,18 @@ namespace Ogre {
     bool RenderWindow::isFullScreen(void) const
     {
         return mIsFullScreen;
+    }
+    //-----------------------------------------------------------------------
+    void RenderWindow::setFullscreenMode(FullscreenMode mode, unsigned int widthPt, unsigned int heightPt)
+    {
+        setFullscreen(mode != FSM_WINDOWED, widthPt, heightPt);
+    }
+    //-----------------------------------------------------------------------
+    RenderWindow::FullscreenMode RenderWindow::getFullscreenMode() const
+    {
+        if (!mIsFullScreen)
+            return FSM_WINDOWED;
+        return mIsBorderlessFullScreen ? FSM_BORDERLESS : FSM_EXCLUSIVE;
     }
     //-----------------------------------------------------------------------
     bool RenderWindow::isPrimary(void) const
