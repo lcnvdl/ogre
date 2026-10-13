@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 OGRE (Object-Oriented Graphics Rendering Engine): motor de render C++ modular (MIT). Este checkout se usa también para generar los bindings **C#** (`Components/Csharp`, vía SWIG), por eso los `.bat` de la raíz.
 
+Es un fork (`origin` = `lcnvdl/ogre`, `upstream` = `OGRECave/ogre`) con cambios propios listados en [`CustomChangelog.md`](CustomChangelog.md). Al traer cambios de `upstream`, revisa esa lista para conservarlos o adaptarlos, y al hacer un cambio propio agrégalo ahí.
+
 ## Build
 
 CMake es el único sistema de build (guía completa: `BuildingOgre.md`). El directorio `build/` ya está configurado con el generador **Visual Studio 17 2022** (D3D11 + GL3+ activos, Vulkan off, `OGRE_BUILD_SAMPLES=ON`, `OGRE_BUILD_COMPONENT_CSHARP=ON`, `OGRE_BUILD_TESTS=OFF`).
