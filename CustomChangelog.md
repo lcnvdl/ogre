@@ -2,12 +2,13 @@
 
 Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial (`upstream` = `OGRECave/ogre`). Sirve para revisar qué hay que conservar o adaptar al traer cambios de `upstream`.
 
-- Base de `upstream`: `0420e6ba5` (2026-10-09, "Main: TangentSpaceCalc - catch zero-length tangents from degenerate-UV tris (#3748)").
+- Base de `upstream`: `68782dcd4` (2026-10-12, "Main: Root - simplify extra iOS checks in restoreConfig"), traída con el merge `031959d42` (2026-10-13). Base anterior: `0420e6ba5`.
+- Las actualizaciones se hacen con merge, no con rebase: los commits del fork ya están en `origin` y un rebase obligaría a hacer force push.
 - Quien usa el fork: ArgonGameEngine (C#, bindings SWIG de `Components/Csharp`). Un cambio de API pública obliga a recompilar todo, regenerar los bindings (`build/csharp`) y copiarlos a Argon.
 
 ## Al actualizar desde upstream
 
-1. `git fetch upstream` y `git rebase upstream/master` (o merge), resolviendo conflictos con esta lista a mano.
+1. `git fetch upstream` y `git merge --no-ff upstream/master`, resolviendo conflictos con esta lista a mano. Actualizar la base de arriba.
 2. Revisar que cada punto de abajo siga presente y compile; si upstream resolvió lo mismo, borrar el punto.
 3. Compilar (`build-release.bat`), regenerar los bindings y desplegar en Argon (`update-ogre-binaries.bat` y los `.cs` de `build/csharp` a `OgreBindings/`, reaplicando el ajuste `LPUTF8Str` de `BitesPINVOKE.cs` que documenta el `AGENTS.md` de Argon). `update-ogre-binaries.bat` no copia los `*.cfg`, porque Argon usa los suyos.
 
@@ -16,6 +17,7 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 ### Main/Bites: archivo de configuración elegible (`17c749590`)
 - `Root::getConfigFileName()` y `Root::deleteConfig()`.
 - `ApplicationContextBase::setConfigFileName()`, `getConfigFileName()` y `getConfigFilePath()`; `createRoot()` los usa en lugar de un `ogre.cfg` fijo.
+- `OgreRoot.cpp` es el archivo con más riesgo de conflicto: upstream lo tocó en `d576e79c4` y `68782dcd4` (`saveConfig` con `_openFileStream`, `restoreConfig` en iOS), y el merge entró sin conflictos.
 
 ### Bites: `ApplicationContextBase::showConfigDialog` (`323d1ca54`)
 - Permite volver a mostrar el diálogo de configuración de Ogre.
