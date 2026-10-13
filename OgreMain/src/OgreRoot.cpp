@@ -274,6 +274,11 @@ namespace Ogre {
     }
 
     //-----------------------------------------------------------------------
+    static void writeLine(DataStreamPtr& stream, const String& line)
+    {
+        stream->write(line.c_str(), line.size());
+        stream->write("\n", 1);
+    }
     void Root::saveConfig(void)
     {
 #if OGRE_PLATFORM == OGRE_PLATFORM_EMSCRIPTEN
@@ -281,45 +286,30 @@ namespace Ogre {
             "Root::saveConfig");
 #endif
 #if OGRE_PLATFORM == OGRE_PLATFORM_APPLE_IOS
-        // Check the Documents directory within the application sandbox
-        Ogre::String outBaseName, extension, configFileName;
-        Ogre::StringUtil::splitFilename(mConfigFileName, outBaseName, extension);
-        configFileName = iOSDocumentsDirectory() + "/" + outBaseName;
-		std::ofstream of(configFileName.c_str());
-        if (of.is_open())
-            mConfigFileName = configFileName;
-        else
-            mConfigFileName.clear();
-#else
+        if(!mConfigFileName.empty())
+        {
+            // Check the Documents directory within the application sandbox
+            Ogre::String outBaseName, basePath, configFileName;
+            Ogre::StringUtil::splitFilename(mConfigFileName, outBaseName, basePath);
+            mConfigFileName = iOSDocumentsDirectory() + "/" + outBaseName;
+        }
+#endif
+
         if (mConfigFileName.empty())
             return;
 
-        std::ofstream of(mConfigFileName.c_str());
-#endif
-        if (!of)
-            OGRE_EXCEPT(Exception::ERR_CANNOT_WRITE_TO_FILE, "Cannot create settings file.",
-            "Root::saveConfig");
+        auto stream = _openFileStream(mConfigFileName, std::ios::out | std::ios::binary);
 
-        if (mActiveRenderer)
-        {
-            of << "Render System=" << mActiveRenderer->getName() << std::endl;
-        }
-        else
-        {
-            of << "Render System=" << std::endl;
-        }
+        writeLine(stream, mActiveRenderer ? "Render System=" + mActiveRenderer->getName() : "Render System=");
 
         for (const auto& r : getAvailableRenderers())
         {
-            of << std::endl;
-            of << "[" << r->getName() << "]" << std::endl;
+            writeLine(stream, "");
+            writeLine(stream, "[" + r->getName() + "]");
             for (const auto& o : r->getConfigOptions()) {
-                of << o.first << "=" << o.second.currentValue << std::endl;
+                writeLine(stream, o.first + "=" + o.second.currentValue);
             }
         }
-
-        of.close();
-
     }
     //-----------------------------------------------------------------------
     bool Root::restoreConfig(void)
@@ -332,42 +322,22 @@ namespace Ogre {
         Ogre::StringUtil::splitFilename(mConfigFileName, outBaseName, extension);
         configFileName = iOSDocumentsDirectory() + "/" + outBaseName;
 
-        std::ifstream fp;
-        fp.open(configFileName.c_str(), std::ios::in);
-        if(fp.is_open())
+        if(FileSystemLayer::fileExists(configFileName))
         {
             // A config file exists in the users Documents dir, we'll use it
             mConfigFileName = configFileName;
         }
-        else
+        else if(!FileSystemLayer::fileExists(mConfigFileName))
         {
-            std::ifstream configFp;
-
             // This might be the first run because there is no config file in the
             // Documents directory.  It could also mean that a config file isn't being used at all
-
-            // Try the path passed into initialise
-            configFp.open(mConfigFileName.c_str(), std::ios::in);
-
+            // Check to see if one was included in the app bundle
+            mConfigFileName = macBundlePath() + "/ogre.cfg";
             // If we can't open this file then we have no default config file to work with
-            // Use the documents dir then.
-            if(!configFp.is_open())
-            {
-                // Check to see if one was included in the app bundle
-                mConfigFileName = macBundlePath() + "/ogre.cfg";
-
-                configFp.open(mConfigFileName.c_str(), std::ios::in);
-
-                // If we can't open this file then we have no default config file to work with
-                // Use the Documents dir then.
-                if(!configFp.is_open())
-                    mConfigFileName = configFileName;
-            }
-
-            configFp.close();
+            // Use the Documents dir then.
+            if(!FileSystemLayer::fileExists(mConfigFileName))
+                mConfigFileName = configFileName;
         }
-
-        fp.close();
 #endif
 
         if (mConfigFileName.empty ())

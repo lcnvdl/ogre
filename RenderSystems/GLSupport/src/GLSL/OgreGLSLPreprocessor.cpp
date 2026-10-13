@@ -69,6 +69,7 @@ namespace Ogre {
             Length = iOther.Length;
             Allocated = iOther.Allocated;
             iOther.Allocated = 0; // !!! not quite correct but effective
+            DisabledMacros = iOther.DisabledMacros;
             return;
         }
 
@@ -95,6 +96,8 @@ namespace Ogre {
 
         if (Allocated)
             memcpy (Buffer + Length, iOther.String, iOther.Length);
+        for (const auto& disabled : iOther.DisabledMacros)
+            DisabledMacros.push_back({Length + disabled.Begin, Length + disabled.End, disabled.Name});
         Length += iOther.Length;
     }
 
@@ -205,8 +208,11 @@ namespace Ogre {
         // Define a new macro for every argument
         size_t i;
         for (i = 0; i < iArgs.size(); i++)
+        {
             cpp.Define (Args [i].String, Args [i].Length,
                         iArgs [i].String, iArgs [i].Length);
+            cpp.MacroList.front().Value.DisabledMacros = iArgs [i].DisabledMacros;
+        }
         // The rest arguments are empty
         for (; i < Args.size(); i++)
             cpp.Define (Args [i].String, Args [i].Length, "", 0);
@@ -214,11 +220,20 @@ namespace Ogre {
         Token xt;
         // make sure that no one down the line sets Value.Allocated = 0
         Token new_xt = Token(Token::TK_TEXT, Value.String, Value.Length);
+        new_xt.DisabledMacros = Value.DisabledMacros;
         bool first = true;
         do {
             xt = new_xt;
             // Now run the macro expansion through the supplimentary preprocessor
             new_xt = cpp.Parse (xt);
+
+            // The result can borrow an argument or a slice of xt's buffer.
+            if (!new_xt.Allocated && new_xt.String && new_xt.String != xt.String)
+            {
+                Token owned (new_xt.Type, "", 0);
+                owned.Append (new_xt);
+                new_xt = owned;
+            }
 
             // Remove the extra macros we have defined, only needed once.
             if (first) {
@@ -232,6 +247,8 @@ namespace Ogre {
         Expanding = false;
         std::swap(cpp.MacroList, iMacros);
 
+        if (xt.Length)
+            xt.DisabledMacros.push_back({0, xt.Length, std::string(Name.String, Name.Length)});
         return xt;
     }
 
@@ -247,6 +264,7 @@ namespace Ogre {
 
     CPreprocessor::CPreprocessor (const Token &iToken, int iLine)
     {
+        SourceToken = &iToken;
         Source = iToken.String;
         SourceEnd = iToken.String + iToken.Length;
         EnableOutput = 1;
@@ -258,6 +276,7 @@ namespace Ogre {
 
     CPreprocessor::CPreprocessor()
     {
+        SourceToken = nullptr;
         Source = 0;
         SourceEnd = 0;
         EnableOutput = 1;
@@ -315,6 +334,13 @@ namespace Ogre {
             while (Source < SourceEnd && (*Source == '_' || isalnum (*Source)))
                 Source++;
             Token t (Token::TK_KEYWORD, begin, Source - begin);
+            if (SourceToken)
+            {
+                size_t offset = begin - SourceToken->String;
+                for (const auto& disabled : SourceToken->DisabledMacros)
+                    if (disabled.Begin <= offset && disabled.End >= offset + t.Length)
+                        t.DisabledMacros.push_back({0, t.Length, disabled.Name});
+            }
             if (iExpand)
                 t = ExpandMacro (t);
             return t;
@@ -414,7 +440,7 @@ namespace Ogre {
     CPreprocessor::Token CPreprocessor::ExpandMacro (const Token &iToken)
     {
         Macro *cur = IsDefined (iToken);
-        if (cur && !cur->Expanding)
+        if (cur && !cur->Expanding && !iToken.IsDisabled(cur->Name))
         {
             std::vector<Token> args;
             int old_line = Line;
@@ -455,7 +481,7 @@ namespace Ogre {
             Token t = cur->ExpandFunc ?
                 cur->ExpandFunc (this, args) :
                 cur->Expand (args, MacroList);
-            t.AppendNL (Line - old_line);
+            t.AppendNL (Line - old_line - t.CountNL ());
 
             return t;
         }
@@ -700,7 +726,9 @@ namespace Ogre {
                 return false;
             }
 
-            vt = &r;
+            // An expansion can still be text containing a suppressed identifier.
+            // Evaluate it with its rescan metadata instead of treating it as a number.
+            return GetValue (r, oValue, iLine);
         }
 
         Macro *m;
@@ -712,7 +740,7 @@ namespace Ogre {
 
         case Token::TK_KEYWORD:
             // Try to expand the macro
-            if ((m = IsDefined (*vt)) && !m->Expanding)
+            if ((m = IsDefined (*vt)) && !m->Expanding && !vt->IsDisabled(m->Name))
             {
                 Token x = ExpandMacro (*vt);
                 m->Expanding = true;
@@ -775,6 +803,7 @@ namespace Ogre {
         }
 
         size_t braceCount = 0;
+        bool directive = oArg.Type == Token::TK_DIRECTIVE;
 
         if( oArg.Type == Token::TK_PUNCTUATION && oArg.String[0] == '(' )
             ++braceCount;
@@ -782,7 +811,8 @@ namespace Ogre {
         size_t len = oArg.Length;
         while (true)
         {
-            Token t = GetToken (iExpand);
+            // Rescan directives later, before expanding their operands.
+            Token t = GetToken (iExpand && !directive);
             switch (t.Type)
             {
             case Token::TK_EOS:
@@ -823,10 +853,19 @@ namespace Ogre {
                         --braceCount;
                 }
                 break;
+            case Token::TK_DIRECTIVE:
+                if (iExpand && oArg.Length && oArg.String[oArg.Length - 1] != '\n')
+                    oArg.Append ("\n", 1);
+                directive = true;
+                break;
+            case Token::TK_NEWLINE:
+                if (iExpand && directive)
+                    oArg.Append (t);
+                directive = false;
+                continue;
             case Token::TK_LINECONT:
             case Token::TK_COMMENT:
             case Token::TK_LINECOMMENT:
-            case Token::TK_NEWLINE:
                 // ignore these tokens
                 continue;
             default:
@@ -1291,6 +1330,7 @@ namespace Ogre {
 
     CPreprocessor::Token CPreprocessor::Parse (const Token &iSource)
     {
+        SourceToken = &iSource;
         Source = iSource.String;
         SourceEnd = Source + iSource.Length;
         Line = 1;
