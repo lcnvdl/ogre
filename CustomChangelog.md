@@ -41,6 +41,10 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - GLX y EGL (`GLXWindow`, `EGLWindow`, que cubre X11/Wayland/Android/Emscripten): sin bordes = estado fullscreen del gestor de ventanas sin `switchMode`. Sin compilar (no hay build de Linux).
 - macOS (`CocoaWindow`): su pantalla completa ya es una ventana sin bordes; `setFullscreenMode` informa `FSM_BORDERLESS`. Sin compilar.
 
+### D3D11: cambiar el tamaño de la ventana sin moverla de lugar (`022384037`)
+- `D3D11RenderWindowHwnd::_restoreWindowedState` mantiene el centro del rectángulo guardado en vez de su esquina superior izquierda, y limita la ventana al área de trabajo de su monitor. Antes, un cambio de tamaño en modo ventana (por ejemplo, de 800×600 a 1280×720 con `setFullscreenMode(FSM_WINDOWED, w, h)`) hacía crecer la ventana hacia abajo a la derecha. Al salir de pantalla completa el tamaño no cambia, así que la ventana vuelve exactamente a donde estaba.
+- Solo cambia `OgreD3D11RenderWindow.cpp` (sin cambios de API): basta con recompilar `RenderSystem_Direct3D11` y copiar la DLL. GL (`Win32Window`) ya centraba la ventana en ese caso. Probado en Argon (StarDelivery, 2026-10-14).
+
 ### Bites: `ApplicationContextBase::raiseWindow` (`6f48bda36`)
 - `virtual raiseWindow(NativeWindowType*)` (vacío en la base) y la sobrecarga `raiseWindow()` sobre `mWindows[0]`, como `setWindowGrab`. Trae la ventana al frente y le da el foco.
 - `ApplicationContextSDL` lo implementa con `SDL_RaiseWindow` activando `SDL_HINT_FORCE_RAISEWINDOW` solo durante la llamada (y restaurando el valor anterior): sin el hint, Windows solo hace parpadear el botón de la barra de tareas si otro proceso tiene el foco. Qt no lo implementa.
