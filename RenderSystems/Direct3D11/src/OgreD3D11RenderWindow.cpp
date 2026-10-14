@@ -1205,8 +1205,21 @@ namespace Ogre
         int left, top;
         if (mHasSavedWindowedState)
         {
-            left = mSavedWindowRect.left;
-            top = mSavedWindowRect.top;
+            // keep the center where it was, so a new windowed size grows evenly instead of towards
+            // the bottom right, and keep the window inside the work area of its monitor
+            const int savedWidth = mSavedWindowRect.right - mSavedWindowRect.left;
+            const int savedHeight = mSavedWindowRect.bottom - mSavedWindowRect.top;
+            left = mSavedWindowRect.left + (savedWidth - (int)winWidth) / 2;
+            top = mSavedWindowRect.top + (savedHeight - (int)winHeight) / 2;
+
+            HMONITOR hMonitor = MonitorFromRect(&mSavedWindowRect, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO monitorInfo;
+            memset(&monitorInfo, 0, sizeof(MONITORINFO));
+            monitorInfo.cbSize = sizeof(MONITORINFO);
+            GetMonitorInfo(hMonitor, &monitorInfo);
+            const RECT& workRect = monitorInfo.rcWork;
+            left = std::max((int)workRect.left, std::min(left, (int)workRect.right - (int)winWidth));
+            top = std::max((int)workRect.top, std::min(top, (int)workRect.bottom - (int)winHeight));
         }
         else
         {
