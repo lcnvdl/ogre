@@ -190,6 +190,20 @@ namespace OgreBites
         }
 
         /**
+        Brings the window to the front and gives it the input focus.
+
+        Unlike a plain raise request, this also works when the operating system
+        would otherwise keep a newly started application behind other windows.
+        */
+        virtual void raiseWindow(NativeWindowType* win) {}
+
+        /// @overload
+        void raiseWindow() {
+            OgreAssert(!mWindows.empty(), "create a window first");
+            raiseWindow(mWindows[0].native);
+        }
+
+        /**
         Finds context-wide resource groups. I load paths from a config file here,
         but you can choose your resource locations however you want.
         */

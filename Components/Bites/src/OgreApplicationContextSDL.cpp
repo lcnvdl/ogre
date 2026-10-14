@@ -121,6 +121,17 @@ void ApplicationContextSDL::setWindowGrab(NativeWindowType* win, bool _grab)
 #endif
 }
 
+void ApplicationContextSDL::raiseWindow(NativeWindowType* win)
+{
+    // without the hint, Windows only flashes the taskbar button when another process has the focus
+    const char* previousForceRaise = SDL_GetHint(SDL_HINT_FORCE_RAISEWINDOW);
+    Ogre::String previousForceRaiseValue = previousForceRaise ? previousForceRaise : "";
+
+    SDL_SetHint(SDL_HINT_FORCE_RAISEWINDOW, "1");
+    SDL_RaiseWindow(win);
+    SDL_SetHint(SDL_HINT_FORCE_RAISEWINDOW, previousForceRaise ? previousForceRaiseValue.c_str() : NULL);
+}
+
 float ApplicationContextSDL::getDisplayDPI() const
 {
     OgreAssert(!mWindows.empty(), "create a window first");

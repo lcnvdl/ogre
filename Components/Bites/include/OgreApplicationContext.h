@@ -60,6 +60,7 @@ namespace OgreBites
         explicit ApplicationContextSDL(const Ogre::String& appName = "Ogre3D");
 
         void setWindowGrab(NativeWindowType* win, bool grab) override;
+        void raiseWindow(NativeWindowType* win) override;
         float getDisplayDPI() const override;
         void shutdown() override;
         void pollEvents() override;
@@ -70,6 +71,7 @@ namespace OgreBites
                      Ogre::NameValuePairList miscParams = Ogre::NameValuePairList()) override;
 
         using ApplicationContextBase::setWindowGrab;
+        using ApplicationContextBase::raiseWindow;
         using ApplicationContextBase::addInputListener;
         using ApplicationContextBase::removeInputListener;
     };
