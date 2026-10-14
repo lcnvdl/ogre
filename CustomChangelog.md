@@ -41,5 +41,11 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - GLX y EGL (`GLXWindow`, `EGLWindow`, que cubre X11/Wayland/Android/Emscripten): sin bordes = estado fullscreen del gestor de ventanas sin `switchMode`. Sin compilar (no hay build de Linux).
 - macOS (`CocoaWindow`): su pantalla completa ya es una ventana sin bordes; `setFullscreenMode` informa `FSM_BORDERLESS`. Sin compilar.
 
+### Bites: `ApplicationContextBase::raiseWindow` (`6f48bda36`)
+- `virtual raiseWindow(NativeWindowType*)` (vacío en la base) y la sobrecarga `raiseWindow()` sobre `mWindows[0]`, como `setWindowGrab`. Trae la ventana al frente y le da el foco.
+- `ApplicationContextSDL` lo implementa con `SDL_RaiseWindow` activando `SDL_HINT_FORCE_RAISEWINDOW` solo durante la llamada (y restaurando el valor anterior): sin el hint, Windows solo hace parpadear el botón de la barra de tareas si otro proceso tiene el foco. Qt no lo implementa.
+- Argon lo llama al terminar el primer frame si la ventana está en modo ventana, porque a veces arrancaba detrás de otras ventanas.
+- SWIG no regenera los bindings de Bites al cambiar solo el header: hubo que tocar `Components/Bites/include/OgreBites.i` antes de compilar.
+
 ### Herramientas locales (`51c7ecab9`)
 - `CLAUDE.md` y scripts `build*.bat` (sin trackear salvo `CLAUDE.md`). Este `CustomChangelog.md`, referenciado desde `CLAUDE.md`.
