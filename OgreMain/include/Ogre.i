@@ -8,6 +8,7 @@
 #include "OgreVertexBoneAssignment.h"
 #include "OgreCodec.h"
 #include "OgreZip.h"
+#include "OgreCallbackArchive.h"
 #include "OgreParticleSystemRenderer.h"
 #include "OgreParticleEmitterFactory.h"
 #include "OgreParticleAffectorFactory.h"
@@ -609,6 +610,9 @@ SHARED_PTR(FileHandleDataStream);
 %include "OgreArchiveFactory.h"
 %ignore Ogre::ZipArchiveFactory; // private
 %include "OgreZip.h"
+#if USE_ARGON_VFS
+%include "OgreCallbackArchive.h"
+#endif
 %ignore Ogre::ArchiveManager::getArchiveIterator;
 %include "OgreArchiveManager.h"
 %include "OgreCodec.h"
