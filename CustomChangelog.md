@@ -51,5 +51,12 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - Argon lo llama al terminar el primer frame si la ventana está en modo ventana, porque a veces arrancaba detrás de otras ventanas.
 - SWIG no regenera los bindings de Bites al cambiar solo el header: hubo que tocar `Components/Bites/include/OgreBites.i` antes de compilar.
 
+### Main: archivo `Callback` para leer recursos a través del host (`OGRE_ARGON_VFS`, apagado por defecto) (`657ed2305`)
+- Opción CMake `OGRE_ARGON_VFS` (por defecto `FALSE`): define `USE_ARGON_VFS` en `OgreBuildSettings.h` (`#cmakedefine01`), que SWIG también lee, así que `Ogre.i` usa `#if USE_ARGON_VFS` (y los bindings exponen la constante `USE_ARGON_VFS`). SWIG no se vuelve a ejecutar al cambiar solo la opción: hay que tocar `Ogre.i` y borrar el `CallbackArchiveFactory.cs` que quede en `build/csharp`. Sin la opción, la clase no existe ni en la DLL ni en los bindings.
+- `OgreCallbackArchive.h`/`.cpp` (nuevos, todo dentro de `#if USE_ARGON_VFS`): `CallbackArchiveFactory` (tipo `"Callback"`) y, privados en el `.cpp`, `CallbackArchive` y `CallbackDataStream`. Los archivos los entrega la aplicación con una tabla `CallbackArchiveFunctions` de punteros a función (`open`, `read`, `seek`, `tell`, `getLength`, `close`, `exists`, `list`); el `DataStream` pide los bytes a medida que Ogre los lee. Es genérico: no sabe nada de Argon ni de cifrado.
+- El nombre del archivo (`addResourceLocation(nombre, "Callback", grupo)`) es una carpeta relativa a la raíz del host (`"."` es la raíz); a las callbacks llegan rutas UTF-8 con `/`. `find`/`list` siguen las reglas de `FileSystemArchive` (carpeta opcional en el patrón, máscara sobre el nombre base, sin distinguir mayúsculas) y se recalculan en cada llamada, sin caché. Las carpetas se deducen de las rutas de los archivos. `getModifiedTime` devuelve 0.
+- `CallbackArchiveFactory::registerFunctions(void*)` (en C#, `IntPtr`) copia la tabla y registra el factory en `ArchiveManager`; hay que llamarlo después de crear `Root`.
+- Lo usa Argon (fase 2 de "recursos a demanda") para que Ogre lea los recursos del juego por el VFS del motor.
+
 ### Herramientas locales (`51c7ecab9`)
 - `CLAUDE.md` y scripts `build*.bat` (sin trackear salvo `CLAUDE.md`). Este `CustomChangelog.md`, referenciado desde `CLAUDE.md`.
