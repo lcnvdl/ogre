@@ -66,5 +66,10 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - `OgreGLXConfigDialog.cpp`: `CreateBackdrop` busca primero `GLX_backdrop.png` junto al ejecutable (`/proc/self/exe`) y después en `OGRE_MEDIA_DIR "/../"`, una ruta absoluta fija al compilar (`/usr/local/share/OGRE-14.6`) que no existe si Ogre no se instaló ahí. Argon copia la imagen a `OgreBinariesLinux/`.
 - Si no encuentra la imagen, el formulario usa un fondo blanco (`XtNbackground`) en vez de un pixmap `None`, que dejaba la ventana sin pintar (se veía lo que había detrás). Compilado en Linux (X11, 2026-10-17).
 
+### Deps: Assimp estático también en Linux (`CMake/Dependencies.cmake`)
+- Ogre compilaba Assimp 6.0.5 estático solo con `MSVC OR MINGW OR SKBUILD`; en Linux `Codec_Assimp.so` enlazaba el `libassimp.so.5` del sistema (5.2 en Ubuntu 22.04), que el juego distribuido no lleva. Ahora lo compila en todas las plataformas salvo Android, Emscripten e iOS (zlib sigue solo en Windows).
+- `-DASSIMP_BUILD_ZLIB=ON`: Assimp usa su zlib y su minizip; los `.a` del sistema no tienen `-fPIC` y no se pueden enlazar en una `.so` ("relocation R_X86_64_PC32 ... recompile with -fPIC"). En Windows ya era el valor por defecto.
+- El bloque de dependencias solo corre si `build/Dependencies` no existe: en un build existente hay que compilar Assimp a mano con los mismos parámetros y reconfigurar con `-Dassimp_DIR=build/Dependencies/lib/cmake/assimp-6.0` (ver `Docs/Forja Games/instrucciones-linux.txt`). `Codec_Assimp.so` pasa de 160 KB a 12 MB y ya no tiene dependencias fuera de Ogre. Probado con Starship en Argon (2026-10-17).
+
 ### Herramientas locales (`51c7ecab9`)
 - `CLAUDE.md` y scripts `build*.bat` (sin trackear salvo `CLAUDE.md`). Este `CustomChangelog.md`, referenciado desde `CLAUDE.md`.

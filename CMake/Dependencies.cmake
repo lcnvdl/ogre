@@ -158,7 +158,11 @@ if(OGRE_BUILD_DEPENDENCIES AND NOT EXISTS ${OGREDEPS_PATH})
           WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/zlib-1.3.2)
       execute_process(COMMAND ${CMAKE_COMMAND}
           --build ${PROJECT_BINARY_DIR}/zlib-1.3.2 ${BUILD_COMMAND_OPTS})
+    endif()
 
+    # Argon: Assimp is built static on every platform, so Codec_Assimp carries it like on Windows
+    # instead of depending on the libassimp of the system (a different version on each distribution).
+    if(NOT ANDROID AND NOT EMSCRIPTEN AND NOT APPLE_IOS)
       message(STATUS "Building Assimp")
       file(DOWNLOAD
               https://github.com/assimp/assimp/archive/refs/tags/v6.0.5.tar.gz
@@ -168,6 +172,7 @@ if(OGRE_BUILD_DEPENDENCIES AND NOT EXISTS ${OGREDEPS_PATH})
       execute_process(COMMAND ${BUILD_COMMAND_COMMON}
           -DZLIB_ROOT=${OGREDEPS_PATH}
           -DBUILD_SHARED_LIBS=OFF
+          -DASSIMP_BUILD_ZLIB=ON # its own zlib and minizip: the system ones are not built with -fPIC
           -DASSIMP_BUILD_TESTS=OFF
           -DASSIMP_NO_EXPORT=TRUE
           -DASSIMP_BUILD_OGRE_IMPORTER=OFF

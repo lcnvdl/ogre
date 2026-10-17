@@ -4,16 +4,16 @@ Todos los comandos de Ogre se corren desde la raiz del repo (ogre/).
 
 
 PASO 1: dependencias del sistema
-sudo apt install swig ninja-build libsdl2-dev libfreetype-dev libxrandr-dev libxaw7-dev libassimp-dev
+sudo apt install swig ninja-build libsdl2-dev libfreetype-dev libxrandr-dev libxaw7-dev
 
-- libassimp-dev: sin esto no se compila Codec_Assimp (carga .obj, .fbx, etc.). Argon lo
-  carga en plugins.cfg, asi que sin el plugin el juego no arranca ("Could not load
-  dynamic library .../Codec_Assimp.so.14.6").
+- No hace falta libassimp-dev: Ogre compila Assimp 6.0.5 estatico (igual que en Windows)
+  y queda dentro de Codec_Assimp.so, asi que el juego distribuido no depende del Assimp
+  del sistema (cambio del fork en CMake/Dependencies.cmake, ver CustomChangelog.md).
 - libxaw7-dev: el dialogo de configuracion de Ogre (GLX) usa Athena widgets.
 - No hace falta Mono: Argon compila los .cs de los bindings con .NET 8. Sin el
   compilador de Mono (mcs) solo se saltea Ogre.dll, que Argon no usa (cambio propio del
   fork en Components/Csharp/CMakeLists.txt, ver CustomChangelog.md).
-- Bullet y pugixml los descarga y compila Ogre solo, dentro de build/, durante el paso 2
+- Bullet, pugixml y Assimp los descarga y compila Ogre solo, dentro de build/, durante el paso 2
   (aunque libpugixml-dev este instalado, usa el suyo: no hace falta instalarlo).
   Por eso el primer configure tarda unos 4 minutos y necesita internet.
 - Opcional: patchelf (sudo apt install patchelf). El script de Argon lo usa si esta, solo
@@ -91,7 +91,7 @@ LLEVARLO A ARGON (desde la raiz de Argon; detalle en Docs/Tecnicos/linux.md de A
      ".so.<version>" al nombre de plugins.cfg, no ".so".
    - GLX_backdrop.png (fondo del dialogo de configuracion, ver abajo).
    Comprobar: ldd OgreBinariesLinux/libOgre.so (todo resuelto dentro de OgreBinariesLinux,
-   nada desde ~/git/ogre). Codec_Assimp depende de libassimp.so.5 del sistema.
+   nada desde ~/git/ogre). Codec_Assimp no depende de ninguna libassimp.
 2. ArgonBats/Build/Miniaudio.sh -> Lib/miniaudio/linux-x64/libargon_miniaudio.so
 3. ArgonBats/Build/Build.sh (dotnet build + copia OgreMedia a bin/.../Media; el csproj elige
    OgreBinariesLinux en Linux)
@@ -101,8 +101,18 @@ LLEVARLO A ARGON (desde la raiz de Argon; detalle en Docs/Tecnicos/linux.md de A
 PROBLEMAS QUE APARECIERON (y su solucion)
 - "Could not load dynamic library .../RenderSystem_GL3Plus.so.14.6": los plugins se
   copiaban como X.so; Ogre en Linux busca X.so.14.6. Ya lo resuelve UpdateBinaries.sh.
-- "Could not load dynamic library .../Codec_Assimp.so.14.6": faltaba libassimp-dev (paso 1)
-  y reconfigurar (paso 2).
+- "Could not load dynamic library .../Codec_Assimp.so.14.6": antes Codec_Assimp usaba el
+  libassimp del sistema. Ahora Assimp va estatico (ver paso 1).
+- Build hecho antes del cambio de Assimp (build/Dependencies ya existe, asi que Ogre no
+  vuelve a compilar las dependencias): compilar Assimp a mano y reconfigurar:
+    cd build && tar xf v6.0.5.tar.gz   (bajarlo de github.com/assimp/assimp si no esta)
+    cd assimp-6.0.5 && cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=$HOME/git/ogre/build/Dependencies -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE \
+      -DBUILD_SHARED_LIBS=OFF -DASSIMP_BUILD_ZLIB=ON -DASSIMP_BUILD_TESTS=OFF -DASSIMP_NO_EXPORT=TRUE \
+      -DASSIMP_BUILD_OGRE_IMPORTER=OFF -DASSIMP_BUILD_ASSIMP_TOOLS=OFF . && cmake --build . --target install
+    cd ~/git/ogre && cmake -S . -B build -Dassimp_DIR=$HOME/git/ogre/build/Dependencies/lib/cmake/assimp-6.0
+  y seguir con el paso 3. Sin ASSIMP_BUILD_ZLIB=ON falla el enlace con
+  "relocation R_X86_64_PC32 ... recompile with -fPIC" (zlib/minizip del sistema).
 - Dialogo de configuracion con el fondo "transparente" (se veia lo que habia detras):
   Ogre buscaba GLX_backdrop.png en OGRE_MEDIA_DIR, una ruta absoluta fija al compilar
   (/usr/local/share/OGRE-14.6/...). Cambio en el fork (OgreGLXConfigDialog.cpp, ver
