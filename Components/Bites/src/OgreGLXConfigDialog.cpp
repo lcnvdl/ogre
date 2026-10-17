@@ -32,8 +32,10 @@ THE SOFTWARE.
 #include "OgreConfigPaths.h"
 #include "OgreFileSystemLayer.h"
 
+#include <climits>
 #include <cstdlib>
 #include <iostream>
+#include <unistd.h>
 
 #include <string>
 #include "OgreConfigDialogImp.h"
@@ -237,10 +239,15 @@ bool GLXConfigurator::CreateWindow() {
     /* Backdrop stuff */
     mBackDrop = CreateBackdrop(rootWindow, DefaultDepth(mDisplay,screen));
 
-    /* Create toplevel */
-    box = XtVaCreateManagedWidget("box",formWidgetClass,toplevel,
-        XtNbackgroundPixmap, mBackDrop,
-        0,NULL);
+    /* Create toplevel. Without a backdrop, a None pixmap would leave the window unpainted. */
+    if (mBackDrop)
+        box = XtVaCreateManagedWidget("box",formWidgetClass,toplevel,
+            XtNbackgroundPixmap, mBackDrop,
+            0,NULL);
+    else
+        box = XtVaCreateManagedWidget("box",formWidgetClass,toplevel,
+            XtNbackground, WhitePixel(mDisplay, screen),
+            0,NULL);
 
     /* Create renderer selection */
     int cury = ystart + 0*rowh;
@@ -336,8 +343,18 @@ Pixmap GLXConfigurator::CreateBackdrop(Window rootWindow, int depth) {
     try {
         Image img;
 
-        // Load backdrop image using OGRE
+        // Load backdrop image using OGRE. Relocatable installs ship it next to the executable;
+        // OGRE_MEDIA_DIR is an absolute path fixed at build time.
         String path = FileSystemLayer::resolveBundlePath(OGRE_MEDIA_DIR "/../GLX_backdrop.png");
+        char executablePath[PATH_MAX];
+        ssize_t executablePathLength = readlink("/proc/self/exe", executablePath, sizeof(executablePath) - 1);
+        if (executablePathLength > 0)
+        {
+            String executableDirectory(executablePath, executablePathLength);
+            executableDirectory = executableDirectory.substr(0, executableDirectory.find_last_of('/') + 1);
+            if (access((executableDirectory + "GLX_backdrop.png").c_str(), R_OK) == 0)
+                path = executableDirectory + "GLX_backdrop.png";
+        }
         DataStreamPtr imgStreamPtr = Root::openFileStream(path);
         img.load(imgStreamPtr, "png");
 
