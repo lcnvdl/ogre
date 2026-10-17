@@ -38,7 +38,7 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - Por defecto `setFullscreenMode` llama a `setFullscreen(mode != FSM_WINDOWED, ...)`, así que los render systems sin implementación propia tratan el modo sin bordes como pantalla completa normal: D3D9 (no se compila en este build, su pantalla completa depende de resetear el dispositivo), Vulkan (no implementa `setFullscreen`), Metal, Tiny.
 - D3D11 (`D3D11RenderWindowHwnd`): sin bordes = ventana popup del tamaño del monitor de la ventana, sin `SetFullscreenState` (la composición del escritorio presenta en cualquier GPU). `_beginUpdate`, `_finishSwitchingFullscreen`, `setActive`, `_destroySwapChain`, `_createSwapChain`, `getVBlankMissCount` y `_resizeSwapChainBuffers` solo sincronizan DXGI en modo exclusivo. `setFullscreen` delega en `setFullscreenMode`. Compilado y probado en Argon (Pong, 2026-10-13): los tres modos, ida y vuelta, perder el foco en sin bordes y Alt+Enter ignorado.
 - GL/GL3+ en Windows (`GLSupport` `Win32Window`): sin bordes con `enterBorderlessFullscreen()` / `leaveBorderlessFullscreen()`, sin `ChangeDisplaySettingsEx`; `setActive` y `destroy` solo restauran el modo de video si era exclusivo. Compilado.
-- GLX y EGL (`GLXWindow`, `EGLWindow`, que cubre X11/Wayland/Android/Emscripten): sin bordes = estado fullscreen del gestor de ventanas sin `switchMode`. Sin compilar (no hay build de Linux).
+- GLX y EGL (`GLXWindow`, `EGLWindow`, que cubre X11/Wayland/Android/Emscripten): sin bordes = estado fullscreen del gestor de ventanas sin `switchMode`. Compilado en Linux (X11, 2026-10-17), sin probar.
 - macOS (`CocoaWindow`): su pantalla completa ya es una ventana sin bordes; `setFullscreenMode` informa `FSM_BORDERLESS`. Sin compilar.
 
 ### D3D11: cambiar el tamaño de la ventana sin moverla de lugar (`022384037`)
@@ -46,6 +46,7 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - Solo cambia `OgreD3D11RenderWindow.cpp` (sin cambios de API): basta con recompilar `RenderSystem_Direct3D11` y copiar la DLL. GL (`Win32Window`) ya centraba la ventana en ese caso. Probado en Argon (StarDelivery, 2026-10-14).
 
 ### Bites: `ApplicationContextBase::raiseWindow` (`6f48bda36`)
+- Con SDL < 2.0.22 (Ubuntu 22.04 trae 2.0.20) `SDL_HINT_FORCE_RAISEWINDOW` no existe: `#ifndef` y solo `SDL_RaiseWindow` (el hint solo importa en Windows).
 - `virtual raiseWindow(NativeWindowType*)` (vacío en la base) y la sobrecarga `raiseWindow()` sobre `mWindows[0]`, como `setWindowGrab`. Trae la ventana al frente y le da el foco.
 - `ApplicationContextSDL` lo implementa con `SDL_RaiseWindow` activando `SDL_HINT_FORCE_RAISEWINDOW` solo durante la llamada (y restaurando el valor anterior): sin el hint, Windows solo hace parpadear el botón de la barra de tareas si otro proceso tiene el foco. Qt no lo implementa.
 - Argon lo llama al terminar el primer frame si la ventana está en modo ventana, porque a veces arrancaba detrás de otras ventanas.
@@ -57,6 +58,13 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - El nombre del archivo (`addResourceLocation(nombre, "Callback", grupo)`) es una carpeta relativa a la raíz del host (`"."` es la raíz); a las callbacks llegan rutas UTF-8 con `/`. `find`/`list` siguen las reglas de `FileSystemArchive` (carpeta opcional en el patrón, máscara sobre el nombre base, sin distinguir mayúsculas) y se recalculan en cada llamada, sin caché. Las carpetas se deducen de las rutas de los archivos. `getModifiedTime` devuelve 0.
 - `CallbackArchiveFactory::registerFunctions(void*)` (en C#, `IntPtr`) copia la tabla y registra el factory en `ArchiveManager`; hay que llamarlo después de crear `Root`.
 - Lo usa Argon (fase 2 de "recursos a demanda") para que Ogre lea los recursos del juego por el VFS del motor.
+
+### Csharp: bindings sin compilador de C# (Linux)
+- `Components/Csharp/CMakeLists.txt`: fuera de MSVC, si no encuentra `mcs` (Mono) ya no apaga el componente; genera igual los `.cs` y `libOgre.so` y solo omite `Ogre.dll` (y su install). Argon compila los `.cs` con .NET 8, así que no necesita Mono.
+
+### Bites: fondo del diálogo de configuración GLX en instalaciones reubicables (Linux)
+- `OgreGLXConfigDialog.cpp`: `CreateBackdrop` busca primero `GLX_backdrop.png` junto al ejecutable (`/proc/self/exe`) y después en `OGRE_MEDIA_DIR "/../"`, una ruta absoluta fija al compilar (`/usr/local/share/OGRE-14.6`) que no existe si Ogre no se instaló ahí. Argon copia la imagen a `OgreBinariesLinux/`.
+- Si no encuentra la imagen, el formulario usa un fondo blanco (`XtNbackground`) en vez de un pixmap `None`, que dejaba la ventana sin pintar (se veía lo que había detrás). Compilado en Linux (X11, 2026-10-17).
 
 ### Herramientas locales (`51c7ecab9`)
 - `CLAUDE.md` y scripts `build*.bat` (sin trackear salvo `CLAUDE.md`). Este `CustomChangelog.md`, referenciado desde `CLAUDE.md`.

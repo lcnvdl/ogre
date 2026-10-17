@@ -1,0 +1,119 @@
+COMPILAR OGRE (FORK) EN LINUX Y USARLO EN ARGON
+Probado en Pop!_OS 22.04 (base Ubuntu 22.04), g++ 11.4, cmake 4.4, SWIG 4.0.2, 2026-10-17.
+Todos los comandos de Ogre se corren desde la raiz del repo (ogre/).
+
+
+PASO 1: dependencias del sistema
+sudo apt install swig ninja-build libsdl2-dev libfreetype-dev libxrandr-dev libxaw7-dev libassimp-dev
+
+- libassimp-dev: sin esto no se compila Codec_Assimp (carga .obj, .fbx, etc.). Argon lo
+  carga en plugins.cfg, asi que sin el plugin el juego no arranca ("Could not load
+  dynamic library .../Codec_Assimp.so.14.6").
+- libxaw7-dev: el dialogo de configuracion de Ogre (GLX) usa Athena widgets.
+- No hace falta Mono: Argon compila los .cs de los bindings con .NET 8. Sin el
+  compilador de Mono (mcs) solo se saltea Ogre.dll, que Argon no usa (cambio propio del
+  fork en Components/Csharp/CMakeLists.txt, ver CustomChangelog.md).
+- Bullet y pugixml los descarga y compila Ogre solo, dentro de build/, durante el paso 2
+  (aunque libpugixml-dev este instalado, usa el suyo: no hace falta instalarlo).
+  Por eso el primer configure tarda unos 4 minutos y necesita internet.
+- Opcional: patchelf (sudo apt install patchelf). El script de Argon lo usa si esta, solo
+  para quitar del rpath el /usr/local/lib que agrega CMake. No es necesario.
+
+
+PASO 2: configurar
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DOGRE_BUILD_TESTS=OFF -DOGRE_BUILD_SAMPLES=ON -DOGRE_BUILD_COMPONENT_CSHARP=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DOGRE_ARGON_VFS=ON -DOGRE_BUILD_PLUGIN_ASSIMP=ON '-DCMAKE_INSTALL_RPATH=$ORIGIN'
+
+- CMAKE_POLICY_VERSION_MINIMUM=3.5 hace falta con cmake 4.x: algunas dependencias que
+  baja Ogre declaran versiones de cmake muy viejas y si no, no configuran.
+- OGRE_ARGON_VFS=ON: compila el archivo "Callback" (CallbackArchiveFactory), que Argon usa
+  para leer los recursos del juego. Esta en OFF por defecto. Sin esto los bindings no
+  traen CallbackArchiveFactory.cs y Argon (con USE_ARGON_VFS, el default) falla.
+- CMAKE_INSTALL_RPATH='$ORIGIN' (con comillas simples, para que bash no lo expanda): las
+  .so instaladas buscan sus dependencias en su propia carpeta. Sin esto el RUNPATH queda
+  apuntando a build/lib de esta maquina y no sirven en otro lado.
+- Mensajes que se pueden ignorar:
+  "Error: .../build/freetype-2.14.3/objs is not a directory" (usa el freetype del sistema)
+  "Csharp compiler not found: Ogre.dll will not be built..." (ver paso 1)
+- Al final muestra la lista de lo que se compila: tienen que aparecer "+ C#/ .NET [BETA]"
+  y "+ Assimp loader (.obj, .ply, .fbx and more)".
+
+
+PASO 3: compilar (unos 2-3 minutos con 8 nucleos)
+cmake --build build --parallel
+
+
+PASO 4: instalar
+cmake --install build --prefix build/dist/Release
+
+
+PASO 5: comprobar
+- VFS:   nm -D build/dist/Release/lib/cli/ogre-sharp-*/libOgre.so | grep -c CallbackArchiveFactory
+         (tiene que dar mas que 0)
+- rpath: readelf -d build/dist/Release/lib/libOgreMain.so.14.6 | grep RUNPATH
+         (tiene que empezar con $ORIGIN)
+- Bindings: los .cs de build/csharp tienen que ser iguales a los de OgreBindings/ de Argon,
+  salvo la linea "// Version" de SWIG y el ajuste LPUTF8Str de BitesPINVOKE.cs (Bug-3 de
+  KnownIssues.md de Argon). Desde la raiz de Argon:
+    for f in OgreBindings/*.cs; do b=$(basename $f); [ -f ~/git/ogre/build/csharp/$b ] && \
+      { diff -q --strip-trailing-cr -I '^// Version' $f ~/git/ogre/build/csharp/$b >/dev/null || echo "difiere: $b"; }; done
+  Si difieren mas archivos, el fork de Windows y el de Linux no estan en el mismo commit.
+
+
+QUE QUEDA Y DONDE
+- build/csharp/*.cs           bindings C# (los mismos que OgreBindings/ de Argon; no se copian)
+- build/csharp/libOgre.so     libreria nativa de los bindings (equivale a libOgre.dll de Windows)
+- build/lib/                  libOgreMain.so, RenderSystem_GL3Plus.so, plugins, etc.
+- build/dist/Release/         todo instalado: lib/ (libOgre*.so), lib/OGRE/ (plugins),
+                              lib/cli/ogre-sharp-14.6.1/ (libOgre.so), bin/, include/
+- build/bin/SampleBrowser     para probar que Ogre anda
+
+En Linux no hay Direct3D: los render systems son OpenGL, OpenGL 3+ y OpenGL ES2.
+Argon usa OpenGL 3+ (OgreBinariesLinux/plugins.cfg).
+
+
+PARA RECOMPILAR DESPUES DE UN CAMBIO
+Solo el paso 3 (y el 4 si se usa dist/). El paso 2 hace falta solo la primera vez,
+despues de borrar build/ o para cambiar una opcion.
+Si se cambia solo un header publico y los bindings no se regeneran, tocar el .i del
+componente (ej. Components/Bites/include/OgreBites.i) antes de compilar.
+Si se cambia una opcion que afecta a los bindings (como OGRE_ARGON_VFS), SWIG tampoco se
+vuelve a ejecutar solo:
+  touch OgreMain/include/Ogre.i && rm -f build/csharp/CallbackArchiveFactory.cs
+y despues el paso 3.
+
+
+LLEVARLO A ARGON (desde la raiz de Argon; detalle en Docs/Tecnicos/linux.md de Argon)
+1. ArgonBats/Ogre/UpdateBinaries.sh [~/git/ogre]
+   Copia build/dist/Release a OgreBinariesLinux/ (no pisa los .cfg de Argon):
+   - Sin symlinks (SVN en Windows los rompe): cada .so con el nombre que pide el loader.
+   - Librerias con el soname (libOgreMain.so.14.6): es lo que figura en NEEDED.
+   - Plugins con version (RenderSystem_GL3Plus.so.14.6): en Linux Ogre agrega
+     ".so.<version>" al nombre de plugins.cfg, no ".so".
+   - GLX_backdrop.png (fondo del dialogo de configuracion, ver abajo).
+   Comprobar: ldd OgreBinariesLinux/libOgre.so (todo resuelto dentro de OgreBinariesLinux,
+   nada desde ~/git/ogre). Codec_Assimp depende de libassimp.so.5 del sistema.
+2. ArgonBats/Build/Miniaudio.sh -> Lib/miniaudio/linux-x64/libargon_miniaudio.so
+3. ArgonBats/Build/Build.sh (dotnet build + copia OgreMedia a bin/.../Media; el csproj elige
+   OgreBinariesLinux en Linux)
+4. ArgonBats/Debug/HelloWorld.sh (cada .bat de ArgonBats tiene su .sh en la misma carpeta)
+
+
+PROBLEMAS QUE APARECIERON (y su solucion)
+- "Could not load dynamic library .../RenderSystem_GL3Plus.so.14.6": los plugins se
+  copiaban como X.so; Ogre en Linux busca X.so.14.6. Ya lo resuelve UpdateBinaries.sh.
+- "Could not load dynamic library .../Codec_Assimp.so.14.6": faltaba libassimp-dev (paso 1)
+  y reconfigurar (paso 2).
+- Dialogo de configuracion con el fondo "transparente" (se veia lo que habia detras):
+  Ogre buscaba GLX_backdrop.png en OGRE_MEDIA_DIR, una ruta absoluta fija al compilar
+  (/usr/local/share/OGRE-14.6/...). Cambio en el fork (OgreGLXConfigDialog.cpp, ver
+  CustomChangelog.md): lo busca primero junto al ejecutable y, si no esta, pinta el fondo
+  de blanco.
+- El dialogo aparece la primera vez que se abre cada juego (no hay ogre.cfg en
+  ~/.local/share/<company>/<name>/), igual que en Windows.
+- SDL de Ubuntu 22.04 (2.0.20) no tiene SDL_HINT_FORCE_RAISEWINDOW: el fork lo protege con
+  #ifndef en OgreApplicationContextSDL.cpp.
+- "Cannot locate a resource group called 'Essential'": faltaba bin/Debug/net8.0/Media.
+  OgreMedia no lo copia el build sino ArgonBats/Ogre/ExportDependencies.sh, que Build.sh
+  llama al final (igual que Build.bat en Windows).
+- Depurador de Lua: lua-debug 2.3.0 necesita glibc 2.38 (Ubuntu 22.04 trae 2.35). Argon lo
+  informa en la consola y sigue. Ver Docs/Transitorios/pending_linux.md de Argon.

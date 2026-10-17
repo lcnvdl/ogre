@@ -22,6 +22,7 @@ cmake --install build --config Release --prefix ./build/dist/Release
 - `build-2.bat`: Release + Debug, cada uno con su install a `build/dist/{Release,Debug}`.
 - `build.bat`: versión antigua sin comprobación de errores (no usarla como referencia).
 - Los `.bat` están sin trackear en git (son locales del usuario).
+- En Linux `build/` es local de cada máquina y usa Ninja (un solo tipo de build, sin `--config`): pasos en `Docs/Forja Games/instrucciones-linux.txt`.
 - Opciones relevantes: `OGRE_BUILD_RENDERSYSTEM_*`, `OGRE_BUILD_PLUGIN_*`, `OGRE_BUILD_COMPONENT_*` (ver `CMakeLists.txt` ~l.317-333), `OGRE_BUILD_TESTS`, `OGRE_BUILD_SAMPLES`, `OGRE_STATIC`.
 - Los componentes Python/Java/C# están deshabilitados con `OGRE_STATIC`; requieren SWIG.
 
