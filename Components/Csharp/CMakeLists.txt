@@ -10,9 +10,10 @@ else()
     find_program(CMAKE_CSharp_COMPILER mcs)
 endif()
 
+# sin compilador de C# igual se generan los .cs y la librería nativa (Argon compila los .cs con .NET);
+# solo se omite Ogre.dll
 if(NOT CMAKE_CSharp_COMPILER)
-    message(WARNING "Csharp Component disabled because Csharp was not found")
-    return()
+    message(WARNING "Csharp compiler not found: Ogre.dll will not be built, only the .cs sources and the native library")
 endif()
 
 include_directories("${PROJECT_BINARY_DIR}/include" "${PROJECT_SOURCE_DIR}/OgreMain/include")
@@ -86,8 +87,10 @@ set(CLI_DEST lib/cli/ogre-sharp-${OGRE_VERSION})
 install(TARGETS libOgre LIBRARY DESTINATION ${CLI_DEST}/)
 
 # compile C# DLL
-add_custom_command(TARGET libOgre POST_BUILD
-    COMMAND "${CMAKE_CSharp_COMPILER}" -target:library -out:Ogre.dll "${PROJECT_BINARY_DIR}/csharp/*.cs"
-    WORKING_DIRECTORY "${PROJECT_BINARY_DIR}/csharp/")
+if(CMAKE_CSharp_COMPILER)
+    add_custom_command(TARGET libOgre POST_BUILD
+        COMMAND "${CMAKE_CSharp_COMPILER}" -target:library -out:Ogre.dll "${PROJECT_BINARY_DIR}/csharp/*.cs"
+        WORKING_DIRECTORY "${PROJECT_BINARY_DIR}/csharp/")
 
-install(FILES "${PROJECT_BINARY_DIR}/csharp/Ogre.dll" DESTINATION ${CLI_DEST})
+    install(FILES "${PROJECT_BINARY_DIR}/csharp/Ogre.dll" DESTINATION ${CLI_DEST})
+endif()
