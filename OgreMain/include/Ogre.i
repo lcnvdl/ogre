@@ -69,7 +69,7 @@ typedef long int time_t;
 %ignore Ogre::ExceptionFactory::throwExceptionEx; // deprecated
 %rename(OgreException) Ogre::Exception; // confilcts with Python Exception
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && defined(SWIGJAVA)
 %{
 #include <android/native_window_jni.h>
 static JavaVM *cached_jvm = 0;
@@ -1038,7 +1038,7 @@ SHARED_PTR(Mesh);
 %ignore Ogre::RenderTarget::copyContentsToMemory(const PixelBox&, FrameBuffer); // deprecated
 %feature("flatnested") Ogre::RenderTarget::FrameStats;
 %include "OgreRenderTarget.h"
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && defined(SWIGJAVA)
     %ignore Ogre::RenderWindow::_notifySurfaceCreated(void*);
     %ignore Ogre::RenderWindow::_notifySurfaceCreated(void*, void*);
     %extend Ogre::RenderWindow {

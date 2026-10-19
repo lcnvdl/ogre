@@ -38,6 +38,9 @@
 #endif
 
 #ifdef __ANDROID__
+%ignore OgreBites::ApplicationContextAndroid::initApp;
+%ignore OgreBites::ApplicationContextAndroid::initAppForAndroid(AAssetManager*, ANativeWindow*);
+#ifdef SWIGJAVA
 %{
 #include <android/native_window_jni.h>
 #include <android/asset_manager_jni.h>
@@ -45,8 +48,6 @@
 JNIEnv* OgreJNIGetEnv();
 %}
 
-%ignore OgreBites::ApplicationContextAndroid::initApp;
-%ignore OgreBites::ApplicationContextAndroid::initAppForAndroid(AAssetManager*, ANativeWindow*);
 %extend OgreBites::ApplicationContextAndroid {
     void initAppForAndroid(jobject assetManager, jobject surface) {
         OgreAssert(assetManager, "assetManager is NULL");
@@ -57,6 +58,18 @@ JNIEnv* OgreJNIGetEnv();
         $self->initAppForAndroid(assetMgr, nativeWnd);
     }
 }
+#else
+// no JNIEnv here: the host gets the AAssetManager* and ANativeWindow* itself
+// (AAssetManager_fromJava / ANativeWindow_fromSurface) and passes them as plain pointers
+%extend OgreBites::ApplicationContextAndroid {
+    void initAppForAndroid(void* assetManager, void* window) {
+        OgreAssert(assetManager, "assetManager is NULL");
+        OgreAssert(window, "window is NULL");
+
+        $self->initAppForAndroid(static_cast<AAssetManager*>(assetManager), static_cast<ANativeWindow*>(window));
+    }
+}
+#endif
 %feature("director") OgreBites::ApplicationContextAndroid;
 %rename(ApplicationContext) ApplicationContextAndroid;
 #else

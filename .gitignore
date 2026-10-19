@@ -9,6 +9,7 @@ cmake-build-*/
 /build/
 /installed/
 /android-build/
+/build-android/
 /embuild/
 /eminstall/
 /mingw/

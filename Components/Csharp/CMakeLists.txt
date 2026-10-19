@@ -30,6 +30,14 @@ endif()
 
 set(CMAKE_SWIG_FLAGS -w401,314 -namespace org.ogre)
 
+# on Android OGRE_STATIC is forced: libOgre links every component and plugin statically,
+# like Java does, and SWIG has to see the Android headers (ApplicationContextAndroid)
+if(ANDROID)
+    list(APPEND CMAKE_SWIG_FLAGS -D__ANDROID__)
+    include(AndroidMacros)
+    add_ndk_cpufeatures_library()
+endif()
+
 if(SWIG_VERSION VERSION_LESS "4.1")
     list(APPEND CMAKE_SWIG_FLAGS -Dfinal)
 endif()
