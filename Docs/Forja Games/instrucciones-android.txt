@@ -1,0 +1,98 @@
+COMPILAR OGRE (FORK) PARA ANDROID (arm64) Y USARLO EN ARGON
+Probado en Pop!_OS 22.04, NDK r27d (27.3.13750724), cmake 4.4, SWIG 4.0.2, 2026-10-18.
+Se compila desde Linux (cross-compile con el NDK). Todos los comandos de Ogre se corren desde la
+raiz del repo (ogre/). Usa su propio directorio, build-android/, asi que no toca el build de
+Linux (build/).
+
+
+PASO 1: dependencias
+- Las mismas de instrucciones-linux.txt para SWIG y Ninja (sudo apt install swig ninja-build).
+  Los bindings los genera el SWIG del sistema; no hace falta el compilador de C#.
+- Android SDK + NDK + JDK 17 (sin sudo, todo en ~/Android). Como quedo instalado:
+    SDK de .NET de Microsoft en ~/.dotnet (el dotnet de Ubuntu no tiene el workload android):
+      dotnet-install.sh --channel 8.0 --install-dir ~/.dotnet
+      DOTNET_ROOT=~/.dotnet ~/.dotnet/dotnet workload install android
+    SDK de Android y JDK 17, con un proyecto "dotnet new android" cualquiera:
+      dotnet build -t:InstallAndroidDependencies -f net8.0-android \
+        -p:AndroidSdkDirectory=$HOME/Android/Sdk -p:JavaSdkDirectory=$HOME/Android/jdk-17 \
+        -p:AcceptAndroidSDKLicenses=True
+    NDK:
+      JAVA_HOME=~/Android/jdk-17 ~/Android/Sdk/cmdline-tools/11.0/bin/sdkmanager \
+        --sdk_root=$HOME/Android/Sdk "ndk;27.3.13750724"
+- Bullet, pugixml, freetype y zlib los descarga y compila Ogre solo, con el NDK, dentro de
+  build-android/ (igual que en Linux; el primer configure necesita internet).
+
+
+PASO 2: configurar
+NDK=$HOME/Android/Sdk/ndk/27.3.13750724
+cmake -S . -B build-android -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake -DANDROID_NDK=$NDK \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DOGRE_ARGON_VFS=ON -DOGRE_BUILD_COMPONENT_CSHARP=ON \
+  -DOGRE_BUILD_COMPONENT_JAVA=OFF -DOGRE_BUILD_COMPONENT_PYTHON=OFF -DOGRE_BUILD_SAMPLES=OFF \
+  -DOGRE_BUILD_TESTS=OFF -DOGRE_BUILD_PLUGIN_ASSIMP=OFF -DOGRE_BUILD_RENDERSYSTEM_VULKAN=OFF
+
+- En Android Ogre fuerza OGRE_STATIC=TRUE (CMakeLists.txt). El fork permite C# igual que
+  upstream permite Java ("NOT OGRE_STATIC OR ANDROID"): todo (OgreMain, componentes, plugins y
+  los wrappers de SWIG) queda dentro de una sola libreria, csharp/libOgre.so. No hay
+  plugins.cfg: Bites carga los plugins compilados con su StaticPluginLoader (createRoot).
+- Plugins que quedan: RenderSystem_GLES2 (GLES2/GLES3), ParticleFX, STBI, Octree, BSP, DotScene.
+  Assimp va apagado: en Android habria que compilar Assimp con el NDK; la idea es que el
+  compilador de Argon convierta los modelos a .mesh.
+- ANDROID_PLATFORM=android-24: la app (net8.0-android) tiene que declarar
+  SupportedOSPlatformVersion >= 24, o en Android 21-23 no carga la libreria.
+- ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON: alinea los segmentos a 16 KB (dispositivos con
+  paginas de 16 KB, exigido por Google Play para apps que apuntan a Android 15+). NDK r28+ ya
+  lo hace por defecto.
+- La primera vez tarda unos minutos (dependencias). Al final tiene que decir
+  "Build type: static" y listar "+ C#/ .NET [BETA]" y "+ OpenGL ES2/ ES3".
+
+
+PASO 3: compilar
+cmake --build build-android --parallel
+
+No hace falta "cmake --install": lo unico que usa Argon es build-android/csharp/libOgre.so y los
+.cs de build-android/csharp/.
+
+
+PASO 4: comprobar
+R=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin
+- Arquitectura: file build-android/csharp/libOgre.so   (ARM aarch64)
+- Dependencias: $R/llvm-readelf -d build-android/csharp/libOgre.so | grep NEEDED
+  (solo librerias del sistema Android: libz, libdl, liblog, libandroid, libEGL, libGLESv2,
+  libm, libc; nada de libc++_shared porque la STL va estatica)
+- VFS:  $R/llvm-nm -D --defined-only build-android/csharp/libOgre.so | grep -c CallbackArchiveFactory
+- Bites para C#: $R/llvm-nm -D --defined-only build-android/csharp/libOgre.so | grep initAppForAndroid
+- 16 KB: $R/llvm-readelf -l build-android/csharp/libOgre.so | grep LOAD   (alineacion 0x4000)
+
+
+QUE CAMBIA EN LOS BINDINGS RESPECTO DE ESCRITORIO
+SWIG corre con -D__ANDROID__ (Components/Csharp/CMakeLists.txt), asi que Bites envuelve
+ApplicationContextAndroid (renombrada a ApplicationContext, igual que ApplicationContextSDL en
+escritorio) y NativeWindowPair.native es ANativeWindow* en vez de SDL_Window*. Difieren:
+ApplicationContext, ApplicationContextBase, BitesPINVOKE, NativeWindowPair, Ogre (CLOCKS_PER_SEC),
+OgrePINVOKE y RenderWindow (_notifySurfaceCreated/_notifySurfaceDestroyed). Solo en Android:
+APKZipArchiveFactory y SWIGTYPE_p_AAssetManager/AInputEvent/ANativeWindow. Solo en escritorio:
+SWIGTYPE_p_SDL_Window y SWIGTYPE_p_std__mapT_..._GpuConstantDefinition_... .
+
+Para C#, ApplicationContext.initAppForAndroid(IntPtr assetManager, IntPtr window) recibe el
+AAssetManager* y el ANativeWindow* ya convertidos (AAssetManager_fromJava y
+ANativeWindow_fromSurface de libandroid.so, llamados desde .NET). La version con jobject y el
+JNI_OnLoad/OgreJNIGetEnv de Ogre.i quedan solo para Java (SWIGJAVA). initApp() no esta expuesto:
+en Android se arranca con initAppForAndroid.
+
+
+LLEVARLO A ARGON (desde la raiz de Argon)
+1. ArgonBats/Ogre/UpdateBinariesAndroid.sh [~/git/ogre]
+   - OgreBinariesAndroid/libOgre.so (sin simbolos de debug: 12,6 MB en vez de 142 MB).
+   - OgreBindingsAndroid/*.cs: solo los bindings que difieren de OgreBindings/ o que existen
+     solo en Android (con CRLF y el ajuste LPUTF8Str de BitesPINVOKE.cs, Bug-3 de KnownIssues.md).
+     Al final lista los de escritorio que no existen en Android.
+2. ArgonBats/Build/Miniaudio.sh android -> Lib/miniaudio/android-arm64/libargon_miniaudio.so
+3. Lua: no hace falta compilarlo, el NuGet KeraLua 1.4.9 ya trae runtimes/android-arm64/liblua54.so.
+
+
+PARA RECOMPILAR DESPUES DE UN CAMBIO
+Solo el paso 3. Si se cambia solo un header publico o una opcion que afecta a los bindings,
+lo mismo que en instrucciones-linux.txt (tocar el .i del componente), con build-android en vez
+de build.
