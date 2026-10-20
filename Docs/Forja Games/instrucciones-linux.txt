@@ -21,13 +21,10 @@ sudo apt install swig ninja-build libsdl2-dev libfreetype-dev libxrandr-dev libx
 
 
 PASO 2: configurar
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DOGRE_BUILD_TESTS=OFF -DOGRE_BUILD_SAMPLES=ON -DOGRE_BUILD_COMPONENT_CSHARP=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DOGRE_ARGON_VFS=ON -DOGRE_BUILD_PLUGIN_ASSIMP=ON '-DCMAKE_INSTALL_RPATH=$ORIGIN'
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DOGRE_BUILD_TESTS=OFF -DOGRE_BUILD_SAMPLES=ON -DOGRE_BUILD_COMPONENT_CSHARP=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DOGRE_BUILD_PLUGIN_ASSIMP=ON '-DCMAKE_INSTALL_RPATH=$ORIGIN'
 
 - CMAKE_POLICY_VERSION_MINIMUM=3.5 hace falta con cmake 4.x: algunas dependencias que
   baja Ogre declaran versiones de cmake muy viejas y si no, no configuran.
-- OGRE_ARGON_VFS=ON: compila el archivo "Callback" (CallbackArchiveFactory), que Argon usa
-  para leer los recursos del juego. Esta en OFF por defecto. Sin esto los bindings no
-  traen CallbackArchiveFactory.cs y Argon (con USE_ARGON_VFS, el default) falla.
 - CMAKE_INSTALL_RPATH='$ORIGIN' (con comillas simples, para que bash no lo expanda): las
   .so instaladas buscan sus dependencias en su propia carpeta. Sin esto el RUNPATH queda
   apuntando a build/lib de esta maquina y no sirven en otro lado.
@@ -76,7 +73,7 @@ Solo el paso 3 (y el 4 si se usa dist/). El paso 2 hace falta solo la primera ve
 despues de borrar build/ o para cambiar una opcion.
 Si se cambia solo un header publico y los bindings no se regeneran, tocar el .i del
 componente (ej. Components/Bites/include/OgreBites.i) antes de compilar.
-Si se cambia una opcion que afecta a los bindings (como OGRE_ARGON_VFS), SWIG tampoco se
+Si se cambia una opcion que afecta a los bindings, SWIG tampoco se
 vuelve a ejecutar solo:
   touch OgreMain/include/Ogre.i && rm -f build/csharp/CallbackArchiveFactory.cs
 y despues el paso 3.

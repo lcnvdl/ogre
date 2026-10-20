@@ -610,9 +610,7 @@ SHARED_PTR(FileHandleDataStream);
 %include "OgreArchiveFactory.h"
 %ignore Ogre::ZipArchiveFactory; // private
 %include "OgreZip.h"
-#if USE_ARGON_VFS
 %include "OgreCallbackArchive.h"
-#endif
 %ignore Ogre::ArchiveManager::getArchiveIterator;
 %include "OgreArchiveManager.h"
 %include "OgreCodec.h"

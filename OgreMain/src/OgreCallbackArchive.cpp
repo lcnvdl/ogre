@@ -5,7 +5,6 @@
 #include "OgreStableHeaders.h"
 #include "OgreCallbackArchive.h"
 
-#if USE_ARGON_VFS
 #include "OgreArchiveManager.h"
 
 namespace Ogre {
@@ -300,4 +299,3 @@ namespace {
         ArchiveManager::getSingleton().addArchiveFactory(&factory);
     }
 }
-#endif

@@ -7,7 +7,6 @@
 
 #include "OgrePrerequisites.h"
 
-#if USE_ARGON_VFS
 #include "OgreArchive.h"
 #include "OgreArchiveFactory.h"
 #include "OgreHeaderPrefix.h"
@@ -82,6 +81,4 @@ namespace Ogre {
 }
 
 #include "OgreHeaderSuffix.h"
-#endif
-
 #endif
