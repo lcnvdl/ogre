@@ -219,10 +219,12 @@ bool Sample_ShaderSystem::frameRenderingQueued( const FrameEvent& evt )
 //-----------------------------------------------------------------------
 void Sample_ShaderSystem::setupContent()
 {
+    // TextureAtlasSamplerFactory is a Singleton; use the base-class deleter to avoid
+    // instantiating Singleton<T>::~Singleton() in this translation unit.
     mTextureAtlasFactory.reset(new TextureAtlasSamplerFactory);
     mShaderGenerator->addSubRenderStateFactory(mTextureAtlasFactory.get());
 
-    mInstancedViewportsFactory.reset(new ShaderExInstancedViewportsFactory);
+    mInstancedViewportsFactory = std::make_unique<ShaderExInstancedViewportsFactory>();
     mShaderGenerator->addSubRenderStateFactory(mInstancedViewportsFactory.get());
 
     // Setup default effects values.
@@ -243,7 +245,7 @@ void Sample_ShaderSystem::setupContent()
     mSceneMgr->setSkyBox(true, "Examples/SceneSkyBox2");
 
     MeshManager::getSingleton().createPlane("Myplane",
-        ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME, Plane(Vector3::UNIT_Y, 0),
+        RGN_DEFAULT, Plane(Vector3::UNIT_Y, 0),
         1500,1500,25,25,true,1,60,60,Vector3::UNIT_Z);
 
     Entity* pPlaneEnt = mSceneMgr->createEntity( "plane", "Myplane" );
@@ -257,9 +259,9 @@ void Sample_ShaderSystem::setupContent()
     for (const auto & curMeshName : MESH_ARRAY)
     {
         MeshPtr pMesh = MeshManager::getSingleton().load(curMeshName,
-            ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,    
-            HardwareBuffer::HBU_DYNAMIC_WRITE_ONLY, 
-            HardwareBuffer::HBU_STATIC_WRITE_ONLY, 
+            RGN_DEFAULT,
+            HBU_CPU_TO_GPU,
+            HBU_GPU_ONLY,
             true, true); //so we can still read it
 
         // Build tangent vectors, all our meshes use only 1 texture coordset 
@@ -453,13 +455,13 @@ void Sample_ShaderSystem::cleanupContent()
     // UnLoad sample meshes and generate tangent vectors.
     for (const auto & curMeshName : MESH_ARRAY)
     {
-        MeshManager::getSingleton().unload(curMeshName, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+        MeshManager::getSingleton().unload(curMeshName, RGN_DEFAULT);
     }
     
-    MeshManager::getSingleton().remove(MAIN_ENTITY_MESH, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+    MeshManager::getSingleton().remove(MAIN_ENTITY_MESH, RGN_DEFAULT);
     mTargetEntities.clear();
 
-    MeshManager::getSingleton().remove("Myplane", ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+    MeshManager::getSingleton().remove("Myplane", RGN_DEFAULT);
 
     mSceneMgr->destroyQuery(mRayQuery);
 }
@@ -542,9 +544,8 @@ static void setNormalMap(Pass* pass, const String& normalMapName)
 
 void Sample_ShaderSystem::generateShaders(Entity* entity)
 {
-    for (unsigned int i=0; i < entity->getNumSubEntities(); ++i)
+    for (auto* curSubEntity : entity->getSubEntities())
     {
-        SubEntity* curSubEntity = entity->getSubEntity(i);
         MaterialPtr curMaterial = curSubEntity->getMaterial();
         bool success;
 
@@ -736,7 +737,7 @@ void Sample_ShaderSystem::addModelToScene(const String &  modelName)
         mLotsOfModelsNodes.push_back(childNode);
         childNode->setPosition(mNumberOfModelsAdded * scaleFactor, 15,  i * scaleFactor);
         childNode->attachObject(entity);
-        MeshPtr modelMesh = MeshManager::getSingleton().getByName(modelName, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+        MeshPtr modelMesh = MeshManager::getSingleton().getByName(modelName, RGN_DEFAULT);
         Vector3 modelSize = modelMesh->getBounds().getSize();
         childNode->scale(1 / modelSize.x * scaleFactor, 
                          1 / modelSize.y * scaleFactor, 
@@ -895,18 +896,19 @@ void Sample_ShaderSystem::applyShadowType(int menuIndex)
         mDirLightCheckBox->hide();
 
         // shadow camera setup
-        PSSMShadowCameraSetup* pssmSetup = new PSSMShadowCameraSetup();
-        pssmSetup->calculateSplitPoints(3, mCamera->getNearClipDistance(), mSceneMgr->getShadowFarDistance());
-        pssmSetup->setSplitPadding(mCamera->getNearClipDistance()*2);
-        pssmSetup->setOptimalAdjustFactor(0, 2);
-        pssmSetup->setOptimalAdjustFactor(1, 1);
-        pssmSetup->setOptimalAdjustFactor(2, 0.5);
+        auto pssmSetup = PSSMShadowCameraSetup::create();
+        auto* pssm = static_cast<PSSMShadowCameraSetup*>(pssmSetup.get());
+        pssm->calculateSplitPoints(3, mCamera->getNearClipDistance(), mSceneMgr->getShadowFarDistance());
+        pssm->setSplitPadding(mCamera->getNearClipDistance()*2);
+        pssm->setOptimalAdjustFactor(0, 2);
+        pssm->setOptimalAdjustFactor(1, 1);
+        pssm->setOptimalAdjustFactor(2, 0.5);
 
-        mSceneMgr->setShadowCameraSetup(ShadowCameraSetupPtr(pssmSetup));
+        mSceneMgr->setShadowCameraSetup(pssmSetup);
 
     
         auto subRenderState = mShaderGenerator->createSubRenderState(SRS_SHADOW_MAPPING);
-        subRenderState->setParameter("split_points", pssmSetup->getSplitPoints());
+        subRenderState->setParameter("split_points", pssm->getSplitPoints());
         subRenderState->setParameter("debug", menuIndex == 2);
         subRenderState->setParameter("array_texture", menuIndex == 3);
 
@@ -978,12 +980,9 @@ void Sample_ShaderSystem::pickTargetObject( const MouseButtonEvent &evt )
     mRayQuery->setRay(mouseRay);
 
     RaySceneQueryResult &result = mRayQuery->execute();
-    RaySceneQueryResult::iterator it = result.begin();
-    RaySceneQueryResult::iterator itEnd = result.end();
 
-    for (; it != itEnd; ++it)
+    for (auto& curEntry : result)
     {
-        RaySceneQueryResultEntry& curEntry = *it;
         
         if (mTargetObj != NULL)
         {
@@ -1019,10 +1018,8 @@ void Sample_ShaderSystem::updateTargetObjInfo()
         {
             Technique* shaderGeneratedTech = NULL;
 
-            for (unsigned int i=0; i < matMainEnt->getNumTechniques(); ++i)
+            for (auto* curTech : matMainEnt->getTechniques())
             {
-                Technique* curTech = matMainEnt->getTechnique(i);
-
                 if (curTech->getSchemeName() == MSN_SHADERGEN)
                 {
                     shaderGeneratedTech = curTech;
@@ -1149,9 +1146,9 @@ void Sample_ShaderSystem::createInstancedViewports()
 void Sample_ShaderSystem::createMaterialForTexture( const String & texName, bool isTextureAtlasTexture )
 {
     MaterialManager * matMgr = MaterialManager::getSingletonPtr();
-    if ( !matMgr->resourceExists(texName, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME) )
+    if ( !matMgr->resourceExists(texName, RGN_DEFAULT) )
     {
-        MaterialPtr newMat = matMgr->create(texName, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+        MaterialPtr newMat = matMgr->create(texName, RGN_DEFAULT);
         newMat->getTechnique(0)->getPass(0)->setLightingEnabled(false);
         TextureUnitState* pState = newMat->getTechnique(0)->getPass(0)->createTextureUnitState(texName);
         if(isTextureAtlasTexture) 
@@ -1167,7 +1164,7 @@ ManualObject* Sample_ShaderSystem::createTextureAtlasObject()
 {
     TextureAtlasSamplerFactory * textureAtlasSamplerFactory = 
         static_cast<TextureAtlasSamplerFactory *>(mShaderGenerator->getSubRenderStateFactory(TextureAtlasSampler::Type));
-    TextureAtlasTablePtr textureAtlasTable(new TextureAtlasTable);
+    auto textureAtlasTable = std::make_shared<TextureAtlasTable>();
 
     DataStreamPtr taiFile = Ogre::ResourceGroupManager::getSingleton().openResource("TextureAtlasSampleWrap.tai");
 

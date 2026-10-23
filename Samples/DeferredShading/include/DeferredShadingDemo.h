@@ -54,7 +54,7 @@ class _OgreSampleClassExport Sample_DeferredShading : public SdkSample, public R
 {
 protected:
     Light* mMainLight;
-    DeferredShadingSystem *mSystem;
+    std::unique_ptr<DeferredShadingSystem> mSystem;
     SelectMenu* mDisplayModeMenu;
 
 public:
@@ -71,7 +71,7 @@ protected:
 
     void cleanupContent(void) override
     {
-        delete mSystem;
+        mSystem.reset();
     }
 
     void setupControls()
@@ -238,7 +238,7 @@ protected:
         Root::getSingleton().setRemoveRenderQueueStructuresOnClear(true);
 
         mCameraMan->setTopSpeed(20.0);
-        mSystem = 0;
+        mSystem.reset();
 
         // Set ambient light
         mSceneMgr->setAmbientLight(ColourValue(0.15, 0.00, 0.00));
@@ -263,7 +263,7 @@ protected:
         mCamera->setNearClipDistance(0.5);
         setDragLook(true);
 
-        mSystem = new DeferredShadingSystem(mWindow->getViewport(0), mSceneMgr, mCamera);
+        mSystem = std::make_unique<DeferredShadingSystem>(mWindow->getViewport(0), mSceneMgr, mCamera);
         mSystem->initialize();
 
         mMainLight = l1;
@@ -364,7 +364,7 @@ protected:
             ent = mSceneMgr->createEntity(l->getName()+"v", "PointLightMesh");
             String matname = l->getName()+"m";
             // Create coloured material
-            MaterialPtr mat = MaterialManager::getSingleton().create(matname, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+            MaterialPtr mat = MaterialManager::getSingleton().create(matname, RGN_DEFAULT);
             Pass* pass = mat->getTechnique(0)->getPass(0);
             pass->setDiffuse(0.0f,0.0f,0.0f,1.0f);
             pass->setAmbient(0.0f,0.0f,0.0f);

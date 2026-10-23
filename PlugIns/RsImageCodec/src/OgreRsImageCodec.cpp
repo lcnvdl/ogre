@@ -7,6 +7,8 @@
 #include "OgreLogManager.h"
 #include "OgreDataStream.h"
 #include "OgreImage.h"
+#include "OgreRoot.h"
+#include "OgreString.h"
 
 enum ColorType
 {
@@ -121,14 +123,9 @@ void RsImageCodec::encodeToFile(const Any& input, const String& outFileName) con
 {
 #if OGRE_PLATFORM != OGRE_PLATFORM_EMSCRIPTEN
     MemoryDataStreamPtr data = static_pointer_cast<MemoryDataStream>(encode(input));
-    std::ofstream f(outFileName.c_str(), std::ios::out | std::ios::binary);
-
-    if (!f.is_open())
-    {
-        OGRE_EXCEPT(Exception::ERR_INTERNAL_ERROR, "could not open file " + outFileName);
-    }
-
-    f.write((char*)data->getPtr(), data->size());
+    DataStreamPtr f = Root::createFileStream(outFileName, "", true);
+    f->write(data->getPtr(), data->size());
+    f->close();
 #endif
 }
 //---------------------------------------------------------------------
@@ -167,6 +164,16 @@ void RsImageCodec::decode(const DataStreamPtr& input, const Any& output) const
     case L16:
         format = PF_L16;
         break;
+    case La16:
+        // no dedicated 16-bit luminance-alpha format, use the 2-channel short format
+        format = PF_SHORT_GR;
+        break;
+    case Rgb16:
+        format = PF_SHORT_RGB;
+        break;
+    case Rgba16:
+        format = PF_SHORT_RGBA;
+        break;
     case Rgb32F:
         format = PF_FLOAT32_RGB;
         break;
@@ -176,6 +183,15 @@ void RsImageCodec::decode(const DataStreamPtr& input, const Any& output) const
     default:
         OGRE_EXCEPT(Exception::ERR_INVALIDPARAMS, "Unsupported image format");
         break;
+    }
+
+    const size_t expectedSize = PixelUtil::getMemorySize(width, height, 1, format);
+    if (dataLen != expectedSize)
+    {
+        rs_vec_free(pixelData, dataLen);
+        OGRE_EXCEPT(Exception::ERR_INVALIDPARAMS,
+                    StringUtil::format("Unexpected decoded image size: %zu, expected %zu", dataLen,
+                                       expectedSize));
     }
 
     image->create(format, width, height);

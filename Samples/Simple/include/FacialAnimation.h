@@ -49,7 +49,7 @@ class _OgreSampleClassExport Sample_FacialAnimation : public SdkSample
             ->attachObject(mSceneMgr->createLight());
 
         // pre-load the mesh so that we can tweak it with a manual animation
-        mHeadMesh = MeshManager::getSingleton().load("facial.mesh", ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+        mHeadMesh = MeshManager::getSingleton().load("facial.mesh", RGN_DEFAULT);
 
         // create a manual animation, create a pose track for it, and create a keyframe in that track
         mManualKeyFrame = mHeadMesh->createAnimation("Manual", 0)->createVertexTrack(4, VAT_POSE)->createVertexPoseKeyFrame(0);
@@ -124,19 +124,19 @@ class _OgreSampleClassExport Sample_FacialAnimation : public SdkSample
         mManualAnimState->setEnabled(!play);
 
         // toggle expression controls
-        for (unsigned int i = 0; i < mExpressions.size(); i++)
+        for (auto* expression : mExpressions)
         {
-            mTrayMgr->moveWidgetToTray(mExpressions[i], play ? TL_NONE : TL_TOPLEFT);
-            if (play) mExpressions[i]->hide();
-            else mExpressions[i]->show();
+            mTrayMgr->moveWidgetToTray(expression, play ? TL_NONE : TL_TOPLEFT);
+            if (play) expression->hide();
+            else expression->show();
         }
 
         // toggle mouth shape controls
-        for (unsigned int i = 0; i < mMouthShapes.size(); i++)
+        for (auto* mouthShape : mMouthShapes)
         {
-            mTrayMgr->moveWidgetToTray(mMouthShapes[i], play ? TL_NONE : TL_TOPRIGHT);
-            if (play) mMouthShapes[i]->hide();
-            else mMouthShapes[i]->show();
+            mTrayMgr->moveWidgetToTray(mouthShape, play ? TL_NONE : TL_TOPRIGHT);
+            if (play) mouthShape->hide();
+            else mouthShape->show();
         }
     }
 

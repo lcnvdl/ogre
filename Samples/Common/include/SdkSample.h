@@ -168,7 +168,7 @@ namespace OgreBites
         -----------------------------------------------------------------------------*/
         void _setup(ApplicationContextBase* context) override
         {
-            mTrayMgr.reset(new TrayManager("SampleControls", context->getRenderWindow(), this));  // create a tray interface
+            mTrayMgr = std::make_unique<TrayManager>("SampleControls", context->getRenderWindow(), this);  // create a tray interface
             // show stats and logo and hide the cursor
             mTrayMgr->showFrameStats(TL_BOTTOMLEFT);
             mTrayMgr->showLogo(TL_BOTTOMRIGHT);
@@ -176,7 +176,7 @@ namespace OgreBites
 
             Sample::_setup(context);
 
-            mControls.reset(new AdvancedRenderControls(mTrayMgr.get(), mCamera));
+            mControls = std::make_unique<AdvancedRenderControls>(mTrayMgr.get(), mCamera);
 
             if (mInputListenerChain.empty()) // allow overrides
                 mInputListenerChain =
@@ -218,7 +218,7 @@ namespace OgreBites
             mCameraNode = mSceneMgr->getRootSceneNode()->createChildSceneNode();
             mCameraNode->attachObject(mCamera);
             mCameraNode->setFixedYawAxis(true);
-            mCameraMan.reset(new CameraMan(mCameraNode));   // create a default camera controller
+            mCameraMan = std::make_unique<CameraMan>(mCameraNode);   // create a default camera controller
 
             mViewport = mWindow->addViewport(mCamera);
             mCamera->setAspectRatio((Ogre::Real)mViewport->getActualWidth() / (Ogre::Real)mViewport->getActualHeight());
@@ -251,11 +251,11 @@ namespace OgreBites
             // Create material
             String matName = "Ogre/DebugTexture" + StringConverter::toString(i);
             MaterialPtr debugMat = MaterialManager::getSingleton().getByName(
-                matName, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+                matName, RGN_DEFAULT);
             if (!debugMat)
             {
                 debugMat = MaterialManager::getSingleton().create(matName,
-                                                                  ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+                                                                  RGN_DEFAULT);
             }
             Pass* p = debugMat->getTechnique(0)->getPass(0);
             p->removeAllTextureUnitStates();

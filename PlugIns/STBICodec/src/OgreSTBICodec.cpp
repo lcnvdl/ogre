@@ -33,6 +33,9 @@ THE SOFTWARE.
 
 #include "OgrePlatformInformation.h"
 #include "OgreString.h"
+#include "OgreRoot.h"
+
+#include <vector>
 
 #if __OGRE_HAVE_NEON
 #define STBI_NEON
@@ -69,6 +72,16 @@ static Ogre::uchar* custom_zlib_compress(Ogre::uchar* data, int data_len, int* o
 #include "stbi/stb_image_write.h"
 
 namespace Ogre {
+
+    namespace
+    {
+        void appendToVector(void* context, void* data, int size)
+        {
+            auto* out = static_cast<std::vector<uchar>*>(context);
+            auto* bytes = static_cast<uchar*>(data);
+            out->insert(out->end(), bytes, bytes + size);
+        }
+    }
 
     STBIImageCodec::RegisteredCodecList STBIImageCodec::msCodecList;
     //---------------------------------------------------------------------
@@ -109,9 +122,9 @@ namespace Ogre {
     //---------------------------------------------------------------------
     DataStreamPtr STBIImageCodec::encode(const Any& input) const
     {
-        if(mType != "png") {
+        if(mType != "png" && mType != "jpeg" && mType != "jpg") {
             OGRE_EXCEPT(Exception::ERR_NOT_IMPLEMENTED,
-                        "currently only encoding to PNG supported",
+                        "currently only encoding to PNG and JPEG supported",
                         "STBIImageCodec::encode" ) ;
         }
 
@@ -133,37 +146,58 @@ namespace Ogre {
             inputData = tempData;
         }
 
-        // Save to PNG
-        int channels = PixelUtil::getComponentCount(format);
-        int len;
-        uchar* data = stbi_write_png_to_mem(inputData, image->getRowSpan(), image->getWidth(), image->getHeight(), channels, &len);
+        const int channels = PixelUtil::getComponentCount(format);
+
+        if (mType == "png")
+        {
+            int len;
+            uchar* data = stbi_write_png_to_mem(inputData, image->getRowSpan(), image->getWidth(),
+                                                image->getHeight(), channels, &len);
+
+            if(tempData)
+            {
+                OGRE_FREE(tempData, MEMCATEGORY_GENERAL);
+            }
+
+            if (!data) {
+                OGRE_EXCEPT(Exception::ERR_INTERNAL_ERROR,
+                    "Error encoding image: " + String(stbi_failure_reason()),
+                    "STBIImageCodec::encode");
+            }
+
+            return DataStreamPtr(new MemoryDataStream(data, len, true));
+        }
+
+        // Save to JPEG. JPEG has no alpha channel, so it is discarded by stb_image_write.
+        static const int quality = 90;
+        std::vector<uchar> data;
+        const bool success = stbi_write_jpg_to_func(appendToVector, &data, image->getWidth(),
+                                                    image->getHeight(), channels, inputData, quality);
 
         if(tempData)
         {
             OGRE_FREE(tempData, MEMCATEGORY_GENERAL);
         }
 
-        if (!data) {
-            OGRE_EXCEPT(Exception::ERR_INTERNAL_ERROR,
-                "Error encoding image: " + String(stbi_failure_reason()),
-                "STBIImageCodec::encode");
+        if (!success)
+        {
+            OGRE_EXCEPT(Exception::ERR_INTERNAL_ERROR, "Error encoding image as JPEG",
+                        "STBIImageCodec::encode");
         }
 
-        return DataStreamPtr(new MemoryDataStream(data, len, true));
+        auto stream = std::make_shared<MemoryDataStream>(data.size());
+        memcpy(stream->getPtr(), data.data(), data.size());
+        return stream;
     }
     //---------------------------------------------------------------------
     void STBIImageCodec::encodeToFile(const Any& input, const String& outFileName) const
     {
 #if OGRE_PLATFORM != OGRE_PLATFORM_EMSCRIPTEN
         MemoryDataStreamPtr data = static_pointer_cast<MemoryDataStream>(encode(input));
-        std::ofstream f(outFileName.c_str(), std::ios::out | std::ios::binary);
+        DataStreamPtr f = Root::createFileStream(outFileName, "", true);
 
-        if (!f.is_open())
-        {
-            OGRE_EXCEPT(Exception::ERR_INTERNAL_ERROR, "could not open file " + outFileName);
-        }
-
-        f.write((char*)data->getPtr(), data->size());
+        f->write(data->getPtr(), data->size());
+        f->close();
 #endif
     }
     //---------------------------------------------------------------------
@@ -173,8 +207,15 @@ namespace Ogre {
         String contents = input->getAsString();
 
         int width, height, components;
-        stbi_uc* pixelData = stbi_load_from_memory((const uchar*)contents.data(),
-                static_cast<int>(contents.size()), &width, &height, &components, 0);
+        const int size = static_cast<int>(contents.size());
+        const bool is16Bit = stbi_is_16_bit_from_memory((const uchar*)contents.data(), size) != 0;
+
+        // stb_image always decodes to 8 bits unless explicitly asked for 16 bits
+        void* pixelData = is16Bit
+            ? static_cast<void*>(stbi_load_16_from_memory((const uchar*)contents.data(), size,
+                                                          &width, &height, &components, 0))
+            : static_cast<void*>(stbi_load_from_memory((const uchar*)contents.data(), size,
+                                                       &width, &height, &components, 0));
 
         if (!pixelData)
         {
@@ -194,16 +235,17 @@ namespace Ogre {
         switch( components )
         {
             case 1:
-                format = PF_BYTE_L;
+                format = is16Bit ? PF_L16 : PF_BYTE_L;
                 break;
             case 2:
-                format = PF_BYTE_LA;
+                // no dedicated 16-bit luminance-alpha format, use the 2-channel short format
+                format = is16Bit ? PF_SHORT_GR : PF_BYTE_LA;
                 break;
             case 3:
-                format = PF_BYTE_RGB;
+                format = is16Bit ? PF_SHORT_RGB : PF_BYTE_RGB;
                 break;
             case 4:
-                format = PF_BYTE_RGBA;
+                format = is16Bit ? PF_SHORT_RGBA : PF_BYTE_RGBA;
                 break;
             default:
                 stbi_image_free(pixelData);
@@ -211,7 +253,7 @@ namespace Ogre {
                 break;
         }
         
-        image->loadDynamicImage(pixelData, width, height, 1, format, true);
+        image->loadDynamicImage(static_cast<uchar*>(pixelData), width, height, 1, format, true);
     }
     //---------------------------------------------------------------------    
     String STBIImageCodec::getType() const

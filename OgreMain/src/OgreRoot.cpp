@@ -938,8 +938,8 @@ namespace Ogre {
         {
             try
             {
-                stream = ResourceGroupManager::getSingleton().createResource(
-                    filename, groupName, overwrite, locationPattern);
+                if (auto rgm = ResourceGroupManager::getSingletonPtr())
+                    stream = rgm->createResource(filename, groupName, overwrite, locationPattern);
             }
             catch (...) {}
 
@@ -958,7 +958,7 @@ namespace Ogre {
     DataStreamPtr Root::openFileStream(const String& filename, const String& groupName)
     {
         DataStreamPtr ret;
-        if(auto rgm = ResourceGroupManager::getSingletonPtr())
+        if (auto rgm = ResourceGroupManager::getSingletonPtr())
             ret = rgm->openResource(filename, groupName, NULL, false);
 
         if(ret)

@@ -83,11 +83,8 @@ void Sample_MeshLod::setupControls( int uimode /*= 0*/ )
 
     // Add all meshes from popular:
     StringVectorPtr meshes = ResourceGroupManager::getSingleton().findResourceNames("General", "*.mesh");
-    StringVector::iterator it, itEnd;
-    it = meshes->begin();
-    itEnd = meshes->end();
-    for(; it != itEnd; it++){
-        models->addItem(*it);
+    for (const auto& mesh : *meshes) {
+        models->addItem(mesh);
     }
 
 
@@ -150,7 +147,7 @@ void Sample_MeshLod::changeSelectedMesh( const String& name )
         mSceneMgr->destroyEntity(mMeshEntity);
         mMeshEntity = 0;
     }
-    mLodConfig.mesh = MeshManager::getSingleton().load(name, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+    mLodConfig.mesh = MeshManager::getSingleton().load(name, RGN_DEFAULT);
     if(mLodConfig.mesh->getBounds().isNull() || mLodConfig.mesh->getBoundingSphereRadius() == 0.0){
         mTrayMgr->showOkDialog("Error", "Failed to load mesh!");
         return;
@@ -452,12 +449,9 @@ bool Sample_MeshLod::getResourceFullPath(MeshPtr& mesh, String& outPath)
     String name = mesh->getName();
     Ogre::FileInfo* info = NULL;
     FileInfoListPtr locPtr = resourceGroupMgr.listResourceFileInfo(group);
-    FileInfoList::iterator it, itEnd;
-    it = locPtr->begin();
-    itEnd = locPtr->end();
-    for (; it != itEnd; it++) {
-        if (StringUtil::startsWith(name, it->filename)) {
-            info = &*it;
+    for (auto& fileInfo : *locPtr) {
+        if (StringUtil::startsWith(name, fileInfo.filename)) {
+            info = &fileInfo;
             break;
         }
     }
@@ -488,8 +482,8 @@ void Sample_MeshLod::addToProfile( Real cost )
     config.advanced.preventPunchingHoles = PREVENT_HOLES_BREAKS;
     config.advanced.preventBreakingLines = PREVENT_HOLES_BREAKS;
     MeshLodGenerator& gen = MeshLodGenerator::getSingleton();
-    LodCollapserPtr collapser(new LodCollapser());
-    LodDataPtr data(new LodData());
+    auto collapser = std::make_shared<LodCollapser>();
+    auto data = std::make_shared<LodData>();
     gen.generateLodLevels(config, LodCollapseCostPtr(), data, LodInputProviderPtr(), LodOutputProviderPtr(), collapser);
     
     ProfiledEdge pv;

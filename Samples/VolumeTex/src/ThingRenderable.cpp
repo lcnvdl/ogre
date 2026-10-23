@@ -16,6 +16,9 @@ same license as the rest of the engine.
 #include "OgreHardwareIndexBuffer.h"
 #include "OgreHardwareBufferManager.h"
 #include "OgreCamera.h"
+
+#include <vector>
+
 using namespace Ogre;
 
 ThingRenderable::ThingRenderable(float radius, size_t count, float qsize):
@@ -27,12 +30,7 @@ ThingRenderable::ThingRenderable(float radius, size_t count, float qsize):
     initialise();
     fillBuffer();
 }
-ThingRenderable::~ThingRenderable()
-{
-    // need to release IndexData and vertexData created for renderable
-    delete mRenderOp.indexData;
-    delete mRenderOp.vertexData;
-}
+ThingRenderable::~ThingRenderable() = default;
 
 void ThingRenderable::addTime(float t)
 {
@@ -67,11 +65,13 @@ void ThingRenderable::initialise()
     //size_t elemsize = 2*3; // position, normal
     //size_t dsize = elemsize*nvertices;
     
-    Ogre::IndexData *idata = new Ogre::IndexData();
-    Ogre::VertexData *vdata = new Ogre::VertexData();
+    mIndexData = std::make_unique<Ogre::IndexData>();
+    mVertexData = std::make_unique<Ogre::VertexData>();
+    Ogre::IndexData *idata = mIndexData.get();
+    Ogre::VertexData *vdata = mVertexData.get();
 
     // Quads
-    unsigned short *faces = new unsigned short[mCount*6];
+    std::vector<unsigned short> faces(mCount * 6);
     for(uint16 x=0; x<uint16(mCount); x++)
     {
         faces[x*6+0] = x*4+0;
@@ -93,7 +93,7 @@ void ThingRenderable::initialise()
 
     vbuf = 
     HardwareBufferManager::getSingleton().createVertexBuffer(
-        offset, nvertices, HardwareBuffer::HBU_DYNAMIC_WRITE_ONLY);
+        offset, nvertices, HBU_CPU_TO_GPU);
 
     bind->setBinding(0, vbuf);
 
@@ -103,16 +103,13 @@ void ThingRenderable::initialise()
         createIndexBuffer(
             HardwareIndexBuffer::IT_16BIT, 
             mCount*6, 
-            HardwareBuffer::HBU_STATIC_WRITE_ONLY);
+            HBU_GPU_ONLY);
 
     idata->indexBuffer = ibuf;
     idata->indexCount = mCount*6;
     idata->indexStart = 0;
-    ibuf->writeData(0, ibuf->getSizeInBytes(), faces, true);
+    ibuf->writeData(0, ibuf->getSizeInBytes(), faces.data(), true);
 
-    // Delete temporary buffers
-    delete [] faces;
-    
     // Now make the render operation
     mRenderOp.operationType = Ogre::RenderOperation::OT_TRIANGLE_LIST;
     mRenderOp.indexData = idata;

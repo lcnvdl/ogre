@@ -65,7 +65,7 @@ public:
         }
 
         GpuProgramPtr ptr = HighLevelGpuProgramManager::getSingleton().getByName(
-            programName, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+            programName, RGN_DEFAULT);
         OgreAssert(ptr, "vertex shader is NULL");
         return ptr;
     }
@@ -77,7 +77,7 @@ public:
         {
             DataStreamPtr ptrMasterSource = ResourceGroupManager::getSingleton().openResource(
                  "LightMaterial_ps.cg"
-                , ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+                , RGN_DEFAULT);
             assert(ptrMasterSource);
             mMasterSource = ptrMasterSource->getAsString();
         }
@@ -89,7 +89,7 @@ public:
 
         // Create shader object
         HighLevelGpuProgramPtr ptrProgram = HighLevelGpuProgramManager::getSingleton().createProgram(
-            name, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
+            name, RGN_DEFAULT,
             "hlsl", GPT_FRAGMENT_PROGRAM);
         ptrProgram->setSource(mMasterSource);
         ptrProgram->setParameter("entry_point","main");
@@ -190,13 +190,11 @@ public:
                 { "farClipDistance",    GpuProgramParameters::ACT_FAR_CLIP_DISTANCE },
                 { "shadowViewProjMat",  GpuProgramParameters::ACT_TEXTURE_VIEWPROJ_MATRIX }
             };
-            int numParams = sizeof(AUTO_PARAMS) / sizeof(AutoParamPair);
-
-            for (int i=0; i<numParams; i++)
+            for (const auto& param : AUTO_PARAMS)
             {
-                if (params->_findNamedConstantDefinition(AUTO_PARAMS[i].name))
+                if (params->_findNamedConstantDefinition(param.name))
                 {
-                    params->setNamedAutoConstant(AUTO_PARAMS[i].name, AUTO_PARAMS[i].type);
+                    params->setNamedAutoConstant(param.name, param.type);
                 }
             }
         }
@@ -231,7 +229,7 @@ public:
         }
 
         GpuProgramPtr ptr = HighLevelGpuProgramManager::getSingleton().getByName(
-            programName, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+            programName, RGN_DEFAULT);
         OgreAssert(ptr, "vertex shader is NULL");
         return ptr;
     }
@@ -257,12 +255,12 @@ public:
         HighLevelGpuProgramPtr ptrProgram;
         if(GpuProgramManager::getSingleton().isSyntaxSupported("glsles"))
         {
-            ptrProgram = HighLevelGpuProgramManager::getSingleton().createProgram(name, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
+            ptrProgram = HighLevelGpuProgramManager::getSingleton().createProgram(name, RGN_DEFAULT,
                                                                                   "glsles", GPT_FRAGMENT_PROGRAM);
         }
         else
         {
-            ptrProgram = HighLevelGpuProgramManager::getSingleton().createProgram(name, ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
+            ptrProgram = HighLevelGpuProgramManager::getSingleton().createProgram(name, RGN_DEFAULT,
                                                                                   "glsl", GPT_FRAGMENT_PROGRAM);
         }
         ptrProgram->setSource(mMasterSource);
@@ -371,13 +369,11 @@ protected:
             { "farClipDistance",    GpuProgramParameters::ACT_FAR_CLIP_DISTANCE },
             { "shadowViewProjMat",  GpuProgramParameters::ACT_TEXTURE_VIEWPROJ_MATRIX }
         };
-        int numParams = sizeof(AUTO_PARAMS) / sizeof(AutoParamPair);
-        
-        for (int i=0; i<numParams; i++)
+        for (const auto& param : AUTO_PARAMS)
         {
-            if (params->_findNamedConstantDefinition(AUTO_PARAMS[i].name))
+            if (params->_findNamedConstantDefinition(param.name))
             {
-                params->setNamedAutoConstant(AUTO_PARAMS[i].name, AUTO_PARAMS[i].type);
+                params->setNamedAutoConstant(param.name, param.type);
             }
         }
     }
@@ -393,9 +389,9 @@ LightMaterialGenerator::LightMaterialGenerator()
     materialBaseName = "DeferredShading/LightMaterial/";
     if ((GpuProgramManager::getSingleton().isSyntaxSupported("glsl") || GpuProgramManager::getSingleton().isSyntaxSupported("glsles")) &&
         !(GpuProgramManager::getSingleton().isSyntaxSupported("ps_2_x") ||GpuProgramManager::getSingleton().isSyntaxSupported("arbfp1")))
-        mImpl = new LightMaterialGeneratorGLSL("DeferredShading/LightMaterial/");
+        mImpl = std::make_unique<LightMaterialGeneratorGLSL>("DeferredShading/LightMaterial/");
     else
-        mImpl = new LightMaterialGeneratorCG("DeferredShading/LightMaterial/");
+        mImpl = std::make_unique<LightMaterialGeneratorCG>("DeferredShading/LightMaterial/");
 }
 
 LightMaterialGenerator::~LightMaterialGenerator()

@@ -357,20 +357,6 @@ const String& TextureAtlasSamplerFactory::getType() const
 }
 
 //-----------------------------------------------------------------------
-bool TextureAtlasSamplerFactory::addTexutreAtlasDefinition( const Ogre::String& filename, const TextureAtlasTablePtr& textureAtlasTable )
-{
-    std::ifstream inp;
-    inp.open(filename.c_str(), std::ios::in | std::ios::binary);
-    if(!inp)
-    {
-        OGRE_EXCEPT(Exception::ERR_FILE_NOT_FOUND, "'" + filename + "' file not found!", 
-            "TextureAtlasSamplerFactory::addTexutreAtlasDefinition" );
-    }
-    DataStreamPtr stream(OGRE_NEW FileStreamDataStream(filename, &inp, false));
-    return addTexutreAtlasDefinition(stream, textureAtlasTable);
-
-}
-//-----------------------------------------------------------------------
 bool TextureAtlasSamplerFactory::addTexutreAtlasDefinition( const DataStreamPtr& stream, const TextureAtlasTablePtr& textureAtlasTable )
 {
     stream->seek(0);
@@ -425,12 +411,10 @@ bool TextureAtlasSamplerFactory::addTexutreAtlasDefinition( const DataStreamPtr&
 
         //place the information in the main texture
         size_t maxTextureCount = 0;
-        TextureAtlasMap::const_iterator it = tmpMap.begin();
-        TextureAtlasMap::const_iterator itEnd = tmpMap.end();
-        for(;it != itEnd; ++it)
+        for (const auto& entry : tmpMap)
         {
-            setTextureAtlasTable(it->first, it->second);
-            maxTextureCount = std::max<size_t>(maxTextureCount, it->second->size());
+            setTextureAtlasTable(entry.first, entry.second);
+            maxTextureCount = std::max<size_t>(maxTextureCount, entry.second->size());
         }
 
         if (maxTextureCount > TAS_MAX_SAFE_ATLASED_TEXTURES)

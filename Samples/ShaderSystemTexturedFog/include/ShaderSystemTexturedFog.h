@@ -18,7 +18,6 @@ class _OgreSampleClassExport Sample_ShaderSystemTexturedFog : public SdkSample
 public:
 
     Sample_ShaderSystemTexturedFog() :
-        mSRSTextureFogFactory(NULL),
             mEntityNameGen("Head")
     {
         mInfo["Title"] = "Shader System - Textured Fog";
@@ -41,9 +40,8 @@ public:
         if (mSRSTextureFogFactory)
         {
             RTShader::ShaderGenerator::getSingleton().removeAllShaderBasedTechniques();
-            RTShader::ShaderGenerator::getSingleton().removeSubRenderStateFactory(mSRSTextureFogFactory);
-            delete mSRSTextureFogFactory;
-            mSRSTextureFogFactory = NULL;
+            RTShader::ShaderGenerator::getSingleton().removeSubRenderStateFactory(mSRSTextureFogFactory.get());
+            mSRSTextureFogFactory.reset();
         }
 
         SdkSample::_shutdown();
@@ -72,7 +70,7 @@ protected:
         mTrayMgr->showCursor();
 
         // create a floor mesh resource
-        MeshManager::getSingleton().createPlane("floor", ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
+        MeshManager::getSingleton().createPlane("floor", RGN_DEFAULT,
             Plane(Vector3::UNIT_Y, -30), 1000, 1000, 10, 10, true, 1, 8, 8, Vector3::UNIT_Z);
 
         // create a floor entity, give it a material, and place it at the origin
@@ -113,8 +111,8 @@ protected:
             mGen->createOrRetrieveRenderState(MSN_SHADERGEN).first;
         pMainRenderState->resetToBuiltinSubRenderStates();
 
-        mSRSTextureFogFactory = new RTShaderSRSTexturedFogFactory;
-        mGen->addSubRenderStateFactory(mSRSTextureFogFactory);
+        mSRSTextureFogFactory = std::make_unique<RTShaderSRSTexturedFogFactory>();
+        mGen->addSubRenderStateFactory(mSRSTextureFogFactory.get());
         pMainRenderState->addTemplateSubRenderState(mGen->createSubRenderState<RTShaderSRSTexturedFog>());
 
         mSRSTextureFogFactory->setBackgroundTextureName("early_morning.jpg");
@@ -211,11 +209,11 @@ protected:
 
     void cleanupContent() override
     {
-        MeshManager::getSingleton().remove("floor", ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+        MeshManager::getSingleton().remove("floor", RGN_DEFAULT);
     }
 
 private:
-    RTShaderSRSTexturedFogFactory* mSRSTextureFogFactory;
+    std::unique_ptr<RTShaderSRSTexturedFogFactory> mSRSTextureFogFactory;
 
     NameGenerator mEntityNameGen;
 

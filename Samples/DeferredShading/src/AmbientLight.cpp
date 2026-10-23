@@ -27,8 +27,9 @@ AmbientLight::AmbientLight()
 {
     setRenderQueueGroup(RENDER_QUEUE_2);
 
-    mRenderOp.vertexData = new VertexData();
-    mRenderOp.indexData = 0;
+    mVertexData = std::make_unique<VertexData>();
+    mRenderOp.vertexData = mVertexData.get();
+    mRenderOp.indexData = nullptr;
 
     GeomUtils::createQuad(mRenderOp.vertexData);
 
@@ -44,12 +45,7 @@ AmbientLight::AmbientLight()
     mMatPtr->load();
 }
 
-AmbientLight::~AmbientLight()
-{
-    // need to release IndexData and vertexData created for renderable
-    delete mRenderOp.indexData;
-    delete mRenderOp.vertexData;
-}
+AmbientLight::~AmbientLight() = default;
 
 /** @copydoc MovableObject::getBoundingRadius */
 Real AmbientLight::getBoundingRadius(void) const
@@ -77,9 +73,8 @@ void AmbientLight::updateFromCamera(Ogre::Camera* camera)
     Ogre::Technique* tech = getMaterial()->getBestTechnique();
     Ogre::Vector3 farCorner = camera->getViewMatrix(true) * camera->getWorldSpaceCorners()[4];
 
-    for (unsigned short i=0; i<tech->getNumPasses(); i++) 
+    for (auto* pass : tech->getPasses())
     {
-        Ogre::Pass* pass = tech->getPass(i);
         // get the vertex shader parameters
         Ogre::GpuProgramParametersSharedPtr params = pass->getVertexProgramParameters();
         // set the camera's far-top-right corner

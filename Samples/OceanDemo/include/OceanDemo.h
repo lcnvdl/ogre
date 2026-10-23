@@ -133,7 +133,7 @@ Sample_Ocean::Sample_Ocean()
 *************************************************************************/
 void Sample_Ocean::cleanupContent()
 {
-    MeshManager::getSingleton().remove("OceanSurface", ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+    MeshManager::getSingleton().remove("OceanSurface", RGN_DEFAULT);
 
     // get rid of the shared pointers before shutting down ogre or exceptions occur
     mActiveFragmentProgram.reset();
@@ -149,9 +149,9 @@ void Sample_Ocean::setupGUI(void)
     SelectMenu* selectMenu = mTrayMgr->createLongSelectMenu(
         TL_TOPLEFT, "MaterialSelectMenu", "Material", 300, 200, 5);
     
-    for (size_t i=0; i<mMaterialControlsContainer.size(); i++)
+    for (const auto& control : mMaterialControlsContainer)
     {
-        selectMenu->addItem(mMaterialControlsContainer[i].getDisplayName());
+        selectMenu->addItem(control.getDisplayName());
     }
 
     mTrayMgr->createCheckBox(TL_TOPLEFT, "SpinLightButton", "Spin Light", 175)->setChecked(true);
@@ -223,7 +223,7 @@ void Sample_Ocean::setupScene()
     oceanSurface.normal = Ogre::Vector3::UNIT_Y;
     oceanSurface.d = 20;
     Ogre::MeshManager::getSingleton().createPlane("OceanSurface",
-        Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
+        Ogre::RGN_DEFAULT,
         oceanSurface,
         1000, 1000, 50, 50, true, 1, 1, 1, Ogre::Vector3::UNIT_Z);
 

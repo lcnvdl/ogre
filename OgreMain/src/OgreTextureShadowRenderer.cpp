@@ -583,12 +583,21 @@ void SceneManager::TextureShadowRenderer::updateShadowTextures(Camera* cam, View
             prepareTexCam(texCam, cam, vp, light, j);
             if(allLayers && layers <= textureCountPerLight)
             {
+                // All layers share one viewport and culling camera, so they see
+                // the same shadow casters. Seed the other split cameras with the
+                // bounds of the layer that is actually rendered; otherwise their
+                // focus/LiSPSM setup has no scene bounds and falls back to the
+                // default shadow projection.
                 std::vector<const Camera*> cams = {texCam};
+                const AxisAlignedBox casterAabb =
+                    mSceneManager->mCamVisibleObjectsMap[cams[0]].aabb;
+
                 j++;
                 for(; j < layers; ++j)
                 {
                     texCam = *(++ci); // next camera
                     texCam->_notifyViewport(shadowView);
+                    mSceneManager->mCamVisibleObjectsMap[texCam].aabb = casterAabb;
                     prepareTexCam(texCam, cam, vp, light, j);
                     cams.push_back(texCam);
                 }
@@ -1061,22 +1070,17 @@ const TexturePtr& SceneManager::TextureShadowRenderer::getShadowTexture(size_t s
 
 void SceneManager::TextureShadowRenderer::resolveShadowTexture(TextureUnitState* tu, size_t shadowIndex, size_t shadowTexUnitIndex) const
 {
-    TexturePtr shadowTex;
-    if (shadowIndex < mShadowTextures.size())
+    if (shadowIndex >= mShadowTextures.size())
     {
-        shadowTex = mShadowTextures[shadowIndex];
-        // Enable projective texturing if fixed-function, but also need to
-        // disable it explicitly for program pipeline.
-        tu->setProjectiveTexturing(!tu->getParent()->hasVertexProgram(), mShadowTextureCameras[shadowIndex]);
-    }
-    else
-    {
-        // Use fallback no-shadow texture
-        // no projection since all uniform colour anyway
-        shadowTex = mNoShadowTexture;
+        tu->_setTexturePtr(mNoShadowTexture);
         tu->setProjectiveTexturing(false);
+        return;
     }
 
+    auto& shadowTex = mShadowTextures[shadowIndex];
+    // Enable projective texturing if fixed-function, but also need to
+    // disable it explicitly for program pipeline.
+    tu->setProjectiveTexturing(!tu->getParent()->hasVertexProgram(), mShadowTextureCameras[shadowIndex]);
     tu->_setTexturePtr(shadowTex);
 
     // set up projectors for all layers, fixed function does not support layered textures anyway

@@ -42,6 +42,8 @@
 #include "OgreArchiveManager.h"
 #include "SdkSample.h"
 
+#include <memory>
+
 #define ENABLE_SHADERS_CACHE 1
 
 #if OGRE_PLATFORM == OGRE_PLATFORM_WINRT
@@ -75,7 +77,7 @@ namespace OgreBites
     class SampleBrowser : public SampleContext, public TrayListener, public Ogre::RenderTargetListener
     {
 #ifdef OGRE_STATIC_LIB
-        typedef std::map<Ogre::String, SamplePlugin*> PluginMap;
+        typedef std::map<Ogre::String, std::unique_ptr<SamplePlugin>> PluginMap;
         PluginMap mPluginNameMap;                      // A structure to map plugin names to class types
 #endif
     public:
@@ -84,7 +86,7 @@ namespace OgreBites
     : SampleContext("OGRE Sample Browser"), mGrabInput(!nograb)
         {
             mIsShuttingDown = false;
-            mTrayMgr = 0;
+            mTrayMgr.reset();
             mLastViewCategory = 0;
             mLastViewTitle = 0;
             mLastSampleIndex = -1;
@@ -320,7 +322,7 @@ namespace OgreBites
                 }
 
                 mWindow->addListener(this);
-                mInputListenerChain = TouchAgnosticInputListenerChain(mWindow, {this, mTrayMgr, getImGuiInputListener()});
+                mInputListenerChain = TouchAgnosticInputListenerChain(mWindow, {this, mTrayMgr.get(), getImGuiInputListener()});
 
                 mTrayMgr->removeWidgetFromTray("StartStop");
                 mTrayMgr->removeWidgetFromTray("Configure");
@@ -331,9 +333,9 @@ namespace OgreBites
 #endif
                 mTrayMgr->moveWidgetToTray("Back", TL_RIGHT);
 
-                for (unsigned int i = 0; i < mThumbs.size(); i++)
+                for (auto* thumb : mThumbs)
                 {
-                    mThumbs[i]->hide();
+                    thumb->hide();
                 }
 
                 while (mTrayMgr->getTrayContainer(TL_CENTER)->isVisible())
@@ -355,7 +357,7 @@ namespace OgreBites
                 else
                     Ogre::ImGuiOverlay::NewFrame(); // clear dialog
 
-                mInputListenerChain = TouchAgnosticInputListenerChain(mWindow, {this, mTrayMgr});
+                mInputListenerChain = TouchAgnosticInputListenerChain(mWindow, {this, mTrayMgr.get()});
                 mWindow->removeListener(this);
 
                 while (!mTrayMgr->getWidgets(TL_NONE).empty())
@@ -414,10 +416,10 @@ namespace OgreBites
         {
             if (menu == mCategoryMenu)      // category changed, so update the sample menu, carousel, and slider
             {
-                for (unsigned int i = 0; i < mThumbs.size(); i++)    // destroy all thumbnails in carousel
+                for (auto* thumb : mThumbs)    // destroy all thumbnails in carousel
                 {
-                    Ogre::MaterialManager::getSingleton().remove(mThumbs[i]->getName(), "Essential");
-                    Widget::nukeOverlayElement(mThumbs[i]);
+                    Ogre::MaterialManager::getSingleton().remove(thumb->getName(), "Essential");
+                    Widget::nukeOverlayElement(thumb);
                 }
                 mThumbs.clear();
 
@@ -700,14 +702,14 @@ namespace OgreBites
             ApplicationContext::setup();
             mWindow = getRenderWindow();
 
-            mInputListenerChain = TouchAgnosticInputListenerChain(mWindow, {this, mTrayMgr});
+            mInputListenerChain = TouchAgnosticInputListenerChain(mWindow, {this, mTrayMgr.get()});
             addInputListener(&mInputListenerChain);
             if(mGrabInput) setWindowGrab();
             else mTrayMgr->hideCursor();
 #ifdef OGRE_STATIC_LIB
-            mPluginNameMap["DefaultSamples"] = new DefaultSamplesPlugin();
+            mPluginNameMap["DefaultSamples"] = std::make_unique<DefaultSamplesPlugin>();
 #   ifdef SAMPLES_INCLUDE_PLAYPEN
-            mPluginNameMap["PlaypenTests"] = new  PlaypenTestPlugin();
+            mPluginNameMap["PlaypenTests"] = std::make_unique<PlaypenTestPlugin>();
 #   endif
 #endif
 
@@ -780,7 +782,7 @@ namespace OgreBites
 #endif
 
             Ogre::ResourceGroupManager::getSingleton().initialiseResourceGroup("Essential");
-            mTrayMgr = new TrayManager("BrowserControls", getRenderWindow(), this);
+            mTrayMgr = std::make_unique<TrayManager>("BrowserControls", getRenderWindow(), this);
             mTrayMgr->showBackdrop("SdkTrays/Bands");
             mTrayMgr->getTrayContainer(TL_NONE)->hide();
 
@@ -807,9 +809,9 @@ namespace OgreBites
             Ogre::String startupSampleTitle;
             Ogre::StringVector sampleList;
 #ifdef OGRE_STATIC_LIB
-            for(auto it = mPluginNameMap.begin(); it != mPluginNameMap.end(); ++it)
+            for (const auto& plugin : mPluginNameMap)
             {
-                sampleList.push_back(it->first);
+                sampleList.push_back(plugin.first);
             }
 #else
             Ogre::ConfigFile cfg;
@@ -872,7 +874,7 @@ namespace OgreBites
 
                 mLoadedSamplePlugins.push_back(sampleDir + s);   // add to records
 #else
-                SamplePlugin* sp = mPluginNameMap[s];
+                SamplePlugin* sp = mPluginNameMap[s].get();
 #endif
 
                 // go through every sample in the plugin...
@@ -894,9 +896,9 @@ namespace OgreBites
             {
                 Ogre::String message = "These requested sample plugins were either missing, corrupt or invalid:";
 
-                for (unsigned int i = 0; i < unloadedSamplePlugins.size(); i++)
+                for (const auto& plugin : unloadedSamplePlugins)
                 {
-                    message += "\n- " + unloadedSamplePlugins[i];
+                    message += "\n- " + plugin;
                 }
 
                 mTrayMgr->showOkDialog("Error!", message);
@@ -911,10 +913,10 @@ namespace OgreBites
         virtual void unloadSamples()
         {
 #ifndef OGRE_STATIC_LIB
-            for (unsigned int i = 0; i < mLoadedSamplePlugins.size(); i++)
+            for (const auto& plugin : mLoadedSamplePlugins)
             {
                 if(!mRoot) break;
-                mRoot->unloadPlugin(mLoadedSamplePlugins[i]);
+                mRoot->unloadPlugin(plugin);
             }
 #endif
 
@@ -1048,11 +1050,7 @@ namespace OgreBites
 #if OGRE_PLATFORM == OGRE_PLATFORM_APPLE_IOS
             [mGestureView release];
 #endif
-            if (mTrayMgr)
-            {
-                delete mTrayMgr;
-                mTrayMgr = 0;
-            }
+            mTrayMgr.reset();
 
             if (!mCurrentSample && mRoot->getRenderSystem() != NULL) destroyDummyScene();
 
@@ -1107,7 +1105,7 @@ namespace OgreBites
             mHiddenOverlays.clear();
         }
 
-        TrayManager* mTrayMgr;                      // SDK tray interface
+        std::unique_ptr<TrayManager> mTrayMgr;      // SDK tray interface
         Ogre::StringVector mLoadedSamplePlugins;       // loaded sample plugins
         std::set<Ogre::String> mSampleCategories;      // sample categories
         SampleSet mLoadedSamples;                      // loaded samples
