@@ -10,10 +10,10 @@ PASO 1: dependencias
   Los bindings los genera el SWIG del sistema; no hace falta el compilador de C#.
 - Android SDK + NDK + JDK 17 (sin sudo, todo en ~/Android). Como quedo instalado:
     SDK de .NET de Microsoft en ~/.dotnet (el dotnet de Ubuntu no tiene el workload android):
-      dotnet-install.sh --channel 8.0 --install-dir ~/.dotnet
+      dotnet-install.sh --channel 10.0 --install-dir ~/.dotnet
       DOTNET_ROOT=~/.dotnet ~/.dotnet/dotnet workload install android
     SDK de Android y JDK 17, con un proyecto "dotnet new android" cualquiera:
-      dotnet build -t:InstallAndroidDependencies -f net8.0-android \
+      dotnet build -t:InstallAndroidDependencies -f net10.0-android \
         -p:AndroidSdkDirectory=$HOME/Android/Sdk -p:JavaSdkDirectory=$HOME/Android/jdk-17 \
         -p:AcceptAndroidSDKLicenses=True
     NDK:
@@ -30,22 +30,27 @@ cmake -S . -B build-android -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
   -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DOGRE_BUILD_COMPONENT_CSHARP=ON \
   -DOGRE_BUILD_COMPONENT_JAVA=OFF -DOGRE_BUILD_COMPONENT_PYTHON=OFF -DOGRE_BUILD_SAMPLES=OFF \
-  -DOGRE_BUILD_TESTS=OFF -DOGRE_BUILD_PLUGIN_ASSIMP=OFF -DOGRE_BUILD_RENDERSYSTEM_VULKAN=OFF
+  -DOGRE_BUILD_TESTS=OFF -DOGRE_BUILD_PLUGIN_ASSIMP=ON -DOGRE_BUILD_RENDERSYSTEM_VULKAN=OFF
 
 - En Android Ogre fuerza OGRE_STATIC=TRUE (CMakeLists.txt). El fork permite C# igual que
   upstream permite Java ("NOT OGRE_STATIC OR ANDROID"): todo (OgreMain, componentes, plugins y
   los wrappers de SWIG) queda dentro de una sola libreria, csharp/libOgre.so. No hay
   plugins.cfg: Bites carga los plugins compilados con su StaticPluginLoader (createRoot).
-- Plugins que quedan: RenderSystem_GLES2 (GLES2/GLES3), ParticleFX, STBI, Octree, BSP, DotScene.
-  Assimp va apagado: en Android habria que compilar Assimp con el NDK; la idea es que el
-  compilador de Argon convierta los modelos a .mesh.
-- ANDROID_PLATFORM=android-24: la app (net8.0-android) tiene que declarar
+- Plugins que quedan: RenderSystem_GLES2 (GLES2/GLES3), ParticleFX, STBI, Assimp, Octree, BSP,
+  DotScene.
+- Assimp (6.0.5, el mismo que en escritorio) lo baja y compila CMake/Dependencies.cmake con el
+  NDK, estatico, solo con los importadores glTF (.gltf/.glb), OBJ y FBX, para no inflar
+  libOgre.so (en escritorio van todos). Si un juego de Argon necesita otro formato, se agrega
+  su ASSIMP_BUILD_<FORMATO>_IMPORTER ahi y se actualiza AndroidModelFormats del compilador de
+  Argon. Las dependencias solo se compilan si no existe build-android/Dependencies: para
+  cambiar los importadores, renombrar esa carpeta y volver a configurar.
+- ANDROID_PLATFORM=android-24: la app (net10.0-android) tiene que declarar
   SupportedOSPlatformVersion >= 24, o en Android 21-23 no carga la libreria.
 - ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON: alinea los segmentos a 16 KB (dispositivos con
   paginas de 16 KB, exigido por Google Play para apps que apuntan a Android 15+). NDK r28+ ya
   lo hace por defecto.
 - La primera vez tarda unos minutos (dependencias). Al final tiene que decir
-  "Build type: static" y listar "+ C#/ .NET [BETA]" y "+ OpenGL ES2/ ES3".
+  "Build type: static" y listar "+ C#/ .NET [BETA]", "+ Assimp loader (...)" y "+ OpenGL ES2/ ES3".
 
 
 PASO 3: compilar

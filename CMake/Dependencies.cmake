@@ -162,8 +162,17 @@ if(OGRE_BUILD_DEPENDENCIES AND NOT EXISTS ${OGREDEPS_PATH})
 
     # Argon: Assimp is built static on every platform, so Codec_Assimp carries it like on Windows
     # instead of depending on the libassimp of the system (a different version on each distribution).
-    if(NOT ANDROID AND NOT EMSCRIPTEN AND NOT APPLE_IOS)
+    # On Android it goes inside libOgre.so with only the formats Argon games use, to keep the APK small.
+    if(NOT EMSCRIPTEN AND NOT APPLE_IOS)
       message(STATUS "Building Assimp")
+      set(ASSIMP_IMPORTERS)
+      if(ANDROID)
+        set(ASSIMP_IMPORTERS
+          -DASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT=OFF
+          -DASSIMP_BUILD_GLTF_IMPORTER=ON
+          -DASSIMP_BUILD_OBJ_IMPORTER=ON
+          -DASSIMP_BUILD_FBX_IMPORTER=ON)
+      endif()
       file(DOWNLOAD
               https://github.com/assimp/assimp/archive/refs/tags/v6.0.5.tar.gz
           ${PROJECT_BINARY_DIR}/v6.0.5.tar.gz)
@@ -177,6 +186,7 @@ if(OGRE_BUILD_DEPENDENCIES AND NOT EXISTS ${OGREDEPS_PATH})
           -DASSIMP_NO_EXPORT=TRUE
           -DASSIMP_BUILD_OGRE_IMPORTER=OFF
           -DASSIMP_BUILD_ASSIMP_TOOLS=OFF
+          ${ASSIMP_IMPORTERS}
           ${PROJECT_BINARY_DIR}/assimp-6.0.5
           WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/assimp-6.0.5)
       execute_process(COMMAND ${CMAKE_COMMAND}

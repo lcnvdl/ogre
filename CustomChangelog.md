@@ -71,6 +71,10 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - `-DASSIMP_BUILD_ZLIB=ON`: Assimp usa su zlib y su minizip; los `.a` del sistema no tienen `-fPIC` y no se pueden enlazar en una `.so` ("relocation R_X86_64_PC32 ... recompile with -fPIC"). En Windows ya era el valor por defecto.
 - El bloque de dependencias solo corre si `build/Dependencies` no existe: en un build existente hay que compilar Assimp a mano con los mismos parámetros y reconfigurar con `-Dassimp_DIR=build/Dependencies/lib/cmake/assimp-6.0` (ver `Docs/Forja Games/instrucciones-linux.txt`). `Codec_Assimp.so` pasa de 160 KB a 12 MB y ya no tiene dependencias fuera de Ogre. Probado con Starship en Argon (2026-10-17).
 
+### Deps: Assimp en Android (`CMake/Dependencies.cmake`)
+- El bloque de Assimp ya no excluye Android. Ahí se compila solo con los importadores glTF, OBJ y FBX (`ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT=OFF`), que son los formatos que Argon acepta en Android; en escritorio siguen todos. Con `OGRE_BUILD_PLUGIN_ASSIMP=ON`, el `StaticPluginLoader` de Bites registra `AssimpPlugin` sin más cambios.
+- `csharp/libOgre.so` (sin símbolos) pasa de 12,6 MB a 14,5 MB, sin dependencias nuevas y con la alineación de 16 KB. Probado en Argon con ShadowSpike (glTF), Starship (OBJ) y HorrorRoomGame en un Moto g75 (2026-10-22).
+
 ### Csharp/Bites: bindings de C# para Android (`0c25ed5c2`)
 - `CMakeLists.txt`: `OGRE_BUILD_COMPONENT_CSHARP` se puede activar en Android aunque `OGRE_STATIC` esté forzado (`"NOT OGRE_STATIC OR ANDROID"`, igual que Java). Todo queda dentro de `csharp/libOgre.so`, y Bites carga los plugins con su `StaticPluginLoader`.
 - `Components/Csharp/CMakeLists.txt`: en Android pasa `-D__ANDROID__` a SWIG (para que Bites envuelva `ApplicationContextAndroid`) y enlaza `cpufeatures` del NDK, que `OgreMain` necesita.
