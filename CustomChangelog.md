@@ -2,7 +2,7 @@
 
 Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial (`upstream` = `OGRECave/ogre`). Sirve para revisar qué hay que conservar o adaptar al traer cambios de `upstream`.
 
-- Base de `upstream`: `68782dcd4` (2026-10-12, "Main: Root - simplify extra iOS checks in restoreConfig"), traída con el merge `031959d42` (2026-10-13). Base anterior: `0420e6ba5`.
+- Base de `upstream`: `10d76cd8c` (2026-10-21, "Terrain: count actual PSSM splits in layer limit"), traída con el merge `dffa23f3f` (2026-10-22, sin conflictos; trae la capa de acceso a archivos UTF-8 y arreglos de esqueletos en Assimp). Bases anteriores: `68782dcd4` (merge `031959d42`) y `0420e6ba5`.
 - Las actualizaciones se hacen con merge, no con rebase: los commits del fork ya están en `origin` y un rebase obligaría a hacer force push.
 - Quien usa el fork: ArgonGameEngine (C#, bindings SWIG de `Components/Csharp`). Un cambio de API pública obliga a recompilar todo, regenerar los bindings (`build/csharp`) y copiarlos a Argon.
 
