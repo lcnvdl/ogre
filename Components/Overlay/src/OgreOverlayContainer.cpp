@@ -37,8 +37,34 @@ namespace Ogre {
     //---------------------------------------------------------------------
     OverlayContainer::OverlayContainer(const String& name)
         : OverlayElement(name),
-        mChildrenProcessEvents(true)
+        mChildrenProcessEvents(true),
+        mClipChildren(false)
     {
+    }
+    //---------------------------------------------------------------------
+    void OverlayContainer::setClipChildren(bool clipChildren)
+    {
+        if (mClipChildren == clipChildren)
+        {
+            return;
+        }
+        mClipChildren = clipChildren;
+        _positionsOutOfDate();
+    }
+    //---------------------------------------------------------------------
+    bool OverlayContainer::_getChildrenScissorRegion(RealRect& scissorRegion)
+    {
+        bool scissorEnabled = _getScissorRegion(scissorRegion);
+        if (!mClipChildren)
+        {
+            return scissorEnabled;
+        }
+
+        Real left = _getDerivedLeft();
+        Real top = _getDerivedTop();
+        RealRect ownRegion(left, top, left + mWidth, top + mHeight);
+        scissorRegion = scissorEnabled ? scissorRegion.intersect(ownRegion) : ownRegion;
+        return true;
     }
     //---------------------------------------------------------------------
     OverlayContainer::~OverlayContainer()

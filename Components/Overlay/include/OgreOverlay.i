@@ -64,6 +64,9 @@ SHARED_PTR(OverlayElement);
     return dynamic_cast<Ogre::TextAreaOverlayElement*>($self);
   }
 }
+// Renderable is not a base of the wrapped OverlayElement (single inheritance), so its overrides cannot be wrapped either
+%ignore Ogre::OverlayElement::preRender;
+%ignore Ogre::OverlayElement::postRender;
 %include "OgreOverlayElement.h"
 %feature("director") Ogre::OverlayElementFactory;
 %include "OgreOverlayElementFactory.h"

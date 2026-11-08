@@ -82,5 +82,11 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - `Components/Bites/include/OgreBites.i`: en C#, `initAppForAndroid(void* assetManager, void* window)` recibe el `AAssetManager*` y el `ANativeWindow*` que el host obtiene con `AAssetManager_fromJava`/`ANativeWindow_fromSurface`. La versión con `jobject` queda para Java.
 - Sin efecto en escritorio: `__ANDROID__` no está definido y las condiciones nuevas solo aplican con `ANDROID`. Pasos de build en `Docs/Forja Games/instrucciones-android.txt`. Compilado con el NDK r27d (2026-10-18), sin probar en un dispositivo todavía.
 
+### Overlay: recorte de hijos con scissor (`clipChildren`)
+- `OverlayContainer::setClipChildren(bool)`/`getClipChildren()` (por defecto `false`): los descendientes se dibujan solo dentro del rectángulo del contenedor. Los contenedores anidados que recortan intersectan sus regiones (`_getChildrenScissorRegion`).
+- `OverlayElement` guarda la región heredada (`mScissorRegion`, `mScissorEnabled`, calculadas en `_updateFromParent`) y sobrescribe `Renderable::preRender`/`postRender`: activa `setScissorTest` con la región pasada por la transformación del `Overlay` (escala y scroll) a píxeles del viewport, y no dibuja el elemento si queda vacía. Sin contenedores que recorten no cambia nada.
+- `OgreOverlay.i` ignora `preRender`/`postRender` de `OverlayElement`: en C# `Renderable` no es su base (herencia simple) y SWIG generaba un `override` inválido.
+- Cambia el layout de `OverlayElement`: hay que recompilar todo lo que use el overlay (Bites). Lo usa Argon para `clipChildren` y `ScrollRect`. Probado en Windows con D3D11 (2026-11-08); Linux y Android sin recompilar todavía.
+
 ### Herramientas locales (`51c7ecab9`)
 - `CLAUDE.md` y scripts `build*.bat` (sin trackear salvo `CLAUDE.md`). Este `CustomChangelog.md`, referenciado desde `CLAUDE.md`.

@@ -37,6 +37,7 @@ THE SOFTWARE.
 #include "OgreOverlayElementCommands.h"
 #include "OgreTechnique.h"
 #include "OgreLogManager.h"
+#include "OgreViewport.h"
 
 namespace Ogre {
 
@@ -65,6 +66,8 @@ namespace Ogre {
       , mTop(0.0f)
       , mWidth(1.0f)
       , mHeight(1.0f)
+      , mScissorEnabled(false)
+      , mScissorApplied(false)
       , mMetricsMode(GMM_RELATIVE)
       , mHorzAlign(GHA_LEFT)
       , mVertAlign(GVA_TOP)
@@ -504,6 +507,8 @@ namespace Ogre {
             child.bottom = mDerivedTop + mHeight;
 
             mClippingRegion = parent.intersect(child);
+
+            mScissorEnabled = mParent->_getChildrenScissorRegion(mScissorRegion);
         }
         else
         {
@@ -511,6 +516,8 @@ namespace Ogre {
             mClippingRegion.top    = mDerivedTop;
             mClippingRegion.right  = mDerivedLeft + mWidth;
             mClippingRegion.bottom = mDerivedTop + mHeight;
+
+            mScissorEnabled = false;
         }
     }
     //---------------------------------------------------------------------
@@ -562,6 +569,79 @@ namespace Ogre {
             _updateFromParent();
         }
         clippingRegion = mClippingRegion;
+    }
+    //---------------------------------------------------------------------
+    bool OverlayElement::_getScissorRegion(RealRect& scissorRegion)
+    {
+        if (mDerivedOutOfDate)
+        {
+            _updateFromParent();
+        }
+        scissorRegion = mScissorRegion;
+        return mScissorEnabled;
+    }
+    //---------------------------------------------------------------------
+    bool OverlayElement::preRender(SceneManager* sm, RenderSystem* rsys)
+    {
+        mScissorApplied = false;
+        if (!mScissorEnabled)
+        {
+            return true;
+        }
+
+        Viewport* viewport = rsys->_getViewport();
+        if (!viewport)
+        {
+            return true;
+        }
+
+        Matrix4 overlayTransform = Matrix4::IDENTITY;
+        if (mOverlay)
+        {
+            mOverlay->_getWorldTransforms(&overlayTransform);
+        }
+
+        // Overlay geometry lives in clip space (y up) and the overlay transform scales and scrolls it there.
+        Vector3 firstCorner = overlayTransform * Vector3(mScissorRegion.left * 2 - 1, 1 - mScissorRegion.top * 2, 0);
+        Vector3 secondCorner = overlayTransform * Vector3(mScissorRegion.right * 2 - 1, 1 - mScissorRegion.bottom * 2, 0);
+
+        Real viewportLeft = Real(viewport->getActualLeft());
+        Real viewportTop = Real(viewport->getActualTop());
+        Real viewportWidth = Real(viewport->getActualWidth());
+        Real viewportHeight = Real(viewport->getActualHeight());
+
+        Real left = viewportLeft + (std::min(firstCorner.x, secondCorner.x) + 1) * 0.5f * viewportWidth;
+        Real right = viewportLeft + (std::max(firstCorner.x, secondCorner.x) + 1) * 0.5f * viewportWidth;
+        Real top = viewportTop + (1 - std::max(firstCorner.y, secondCorner.y)) * 0.5f * viewportHeight;
+        Real bottom = viewportTop + (1 - std::min(firstCorner.y, secondCorner.y)) * 0.5f * viewportHeight;
+
+        Rect viewportRect(int32(viewportLeft), int32(viewportTop), int32(viewportLeft + viewportWidth),
+                          int32(viewportTop + viewportHeight));
+        Rect scissorRect(int32(std::floor(left + 0.5f)), int32(std::floor(top + 0.5f)),
+                         int32(std::floor(right + 0.5f)), int32(std::floor(bottom + 0.5f)));
+        if (scissorRect.right < scissorRect.left || scissorRect.bottom < scissorRect.top)
+        {
+            return false;
+        }
+        scissorRect = scissorRect.intersect(viewportRect);
+        if (scissorRect.isNull())
+        {
+            return false;
+        }
+
+        rsys->setScissorTest(true, scissorRect);
+        mScissorApplied = true;
+        return true;
+    }
+    //---------------------------------------------------------------------
+    void OverlayElement::postRender(SceneManager* sm, RenderSystem* rsys)
+    {
+        if (!mScissorApplied)
+        {
+            return;
+        }
+        rsys->setScissorTest(false);
+        mScissorApplied = false;
     }
     //---------------------------------------------------------------------
     ushort OverlayElement::_notifyZOrder(ushort newZOrder)

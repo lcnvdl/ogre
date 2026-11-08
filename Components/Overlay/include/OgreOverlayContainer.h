@@ -66,7 +66,8 @@ namespace Ogre {
         ChildContainerMap mChildContainers;
 
         bool mChildrenProcessEvents;
- 
+        bool mClipChildren;
+
     public:
         /// Constructor: do not call direct, use OverlayManager::createOverlayElement
         OverlayContainer(const String& name);
@@ -134,6 +135,22 @@ namespace Ogre {
         /** Should this container pass events to their children */
         virtual inline void setChildrenProcessEvents(bool val)
         { mChildrenProcessEvents = val; }
+
+        /** Restricts the drawing of every descendant to the rectangle of this container.
+
+            Uses the scissor test, so the part of a descendant outside the rectangle is not drawn.
+            Nested containers that clip their children intersect their rectangles.
+        */
+        void setClipChildren(bool clipChildren);
+
+        /** Whether the descendants are restricted to the rectangle of this container. */
+        bool getClipChildren() const { return mClipChildren; }
+
+        /** Gets the region that this container restricts its children to.
+            @param scissorRegion Receives the region, in relative screen coordinates.
+            @return false when neither this container nor its ancestors clip their children.
+        */
+        bool _getChildrenScissorRegion(RealRect& scissorRegion);
 
         /** This returns a OverlayElement at position x,y. */
         OverlayElement* findElementAt(Real x, Real y) override;      // relative to parent

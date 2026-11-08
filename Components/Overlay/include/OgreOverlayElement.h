@@ -115,6 +115,12 @@ namespace Ogre {
         DisplayString mCaption;
         ColourValue mColour;
         RealRect mClippingRegion;
+        /// Region, in relative screen coordinates, that the ancestors with clip children restrict this element to
+        RealRect mScissorRegion;
+        /// Whether some ancestor clips its children, so mScissorRegion applies
+        bool mScissorEnabled;
+        /// Whether preRender enabled the scissor test and postRender has to disable it
+        bool mScissorApplied;
 
         GuiMetricsMode mMetricsMode;
         GuiHorizontalAlignment mHorzAlign;
@@ -284,6 +290,15 @@ namespace Ogre {
 
         void getWorldTransforms(Matrix4* xform) const override;
 
+        /** Enables the scissor test when an ancestor clips its children.
+
+            Skips the render when the element is completely outside that region.
+        */
+        bool preRender(SceneManager* sm, RenderSystem* rsys) override;
+
+        /** Disables the scissor test enabled by preRender. */
+        void postRender(SceneManager* sm, RenderSystem* rsys) override;
+
         /** Tell the object to recalculate */
         virtual void _positionsOutOfDate(void);
 
@@ -310,6 +325,12 @@ namespace Ogre {
 
         /** Gets the clipping region of the element */
         virtual void _getClippingRegion(RealRect &clippingRegion);
+
+        /** Gets the region that the ancestors with clip children restrict this element to.
+            @param scissorRegion Receives the region, in relative screen coordinates.
+            @return false when no ancestor clips its children.
+        */
+        virtual bool _getScissorRegion(RealRect& scissorRegion);
 
         /** Internal method to notify the element when Z-order of parent overlay
         has changed.
