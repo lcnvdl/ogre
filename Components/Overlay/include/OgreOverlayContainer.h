@@ -67,6 +67,11 @@ namespace Ogre {
 
         bool mChildrenProcessEvents;
         bool mClipChildren;
+        /// Distance, in the metrics of the element, between each edge of the container and the region that clips its children
+        Real mClipInsetLeft;
+        Real mClipInsetTop;
+        Real mClipInsetRight;
+        Real mClipInsetBottom;
 
     public:
         /// Constructor: do not call direct, use OverlayManager::createOverlayElement
@@ -142,6 +147,12 @@ namespace Ogre {
             Nested containers that clip their children intersect their rectangles.
         */
         void setClipChildren(bool clipChildren);
+
+        /** Shrinks the rectangle that restricts the descendants when this container clips them.
+
+            Useful when the container draws outside its logical area, such as a drop shadow.
+        */
+        void setClipInsets(Real left, Real top, Real right, Real bottom);
 
         /** Whether the descendants are restricted to the rectangle of this container. */
         bool getClipChildren() const { return mClipChildren; }

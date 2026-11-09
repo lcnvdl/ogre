@@ -38,7 +38,11 @@ namespace Ogre {
     OverlayContainer::OverlayContainer(const String& name)
         : OverlayElement(name),
         mChildrenProcessEvents(true),
-        mClipChildren(false)
+        mClipChildren(false),
+        mClipInsetLeft(0),
+        mClipInsetTop(0),
+        mClipInsetRight(0),
+        mClipInsetBottom(0)
     {
     }
     //---------------------------------------------------------------------
@@ -52,6 +56,15 @@ namespace Ogre {
         _positionsOutOfDate();
     }
     //---------------------------------------------------------------------
+    void OverlayContainer::setClipInsets(Real left, Real top, Real right, Real bottom)
+    {
+        mClipInsetLeft = left;
+        mClipInsetTop = top;
+        mClipInsetRight = right;
+        mClipInsetBottom = bottom;
+        _positionsOutOfDate();
+    }
+    //---------------------------------------------------------------------
     bool OverlayContainer::_getChildrenScissorRegion(RealRect& scissorRegion)
     {
         bool scissorEnabled = _getScissorRegion(scissorRegion);
@@ -62,7 +75,9 @@ namespace Ogre {
 
         Real left = _getDerivedLeft();
         Real top = _getDerivedTop();
-        RealRect ownRegion(left, top, left + mWidth, top + mHeight);
+        RealRect ownRegion(left + mClipInsetLeft * mPixelScaleX, top + mClipInsetTop * mPixelScaleY,
+                           left + mWidth - mClipInsetRight * mPixelScaleX,
+                           top + mHeight - mClipInsetBottom * mPixelScaleY);
         scissorRegion = scissorEnabled ? scissorRegion.intersect(ownRegion) : ownRegion;
         return true;
     }

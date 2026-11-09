@@ -82,6 +82,11 @@ namespace Ogre {
       , mDerivedLeft(0)
       , mDerivedTop(0)
       , mDerivedOutOfDate(true)
+      , mRotationRadians(0)
+      , mRotationPivotLeft(0)
+      , mRotationPivotTop(0)
+      , mDerivedRotationEnabled(false)
+      , mDerivedRotation(Matrix4::IDENTITY)
       , mGeomPositionsOutOfDate(true)
       , mGeomUVsOutOfDate(true)
       , mZOrder(0)
@@ -353,6 +358,24 @@ namespace Ogre {
     void OverlayElement::getWorldTransforms(Matrix4* xform) const
     {
         mOverlay->_getWorldTransforms(xform);
+        if (mDerivedRotationEnabled)
+        {
+            *xform = *xform * mDerivedRotation;
+        }
+    }
+    //---------------------------------------------------------------------
+    void OverlayElement::setRotation(Real radians, Real pivotLeft, Real pivotTop)
+    {
+        mRotationRadians = radians;
+        mRotationPivotLeft = pivotLeft;
+        mRotationPivotTop = pivotTop;
+        mDerivedOutOfDate = true;
+    }
+    //---------------------------------------------------------------------
+    bool OverlayElement::_getDerivedRotation(Matrix4& rotation) const
+    {
+        rotation = mDerivedRotation;
+        return mDerivedRotationEnabled;
     }
     //---------------------------------------------------------------------
     void OverlayElement::_positionsOutOfDate(void)
@@ -491,6 +514,34 @@ namespace Ogre {
             mDerivedTop = parentBottom + mTop;
             break;
         };
+
+        Matrix4 parentRotation = Matrix4::IDENTITY;
+        bool parentRotated = mParent != 0 && mParent->_getDerivedRotation(parentRotation);
+        mDerivedRotationEnabled = parentRotated || mRotationRadians != 0;
+        if (mDerivedRotationEnabled)
+        {
+            mDerivedRotation = parentRotation;
+            if (mRotationRadians != 0)
+            {
+                OverlayManager& overlayManager = OverlayManager::getSingleton();
+                Real viewportHeight = Real(overlayManager.getViewportHeight());
+                Real aspect = viewportHeight > 0 ? Real(overlayManager.getViewportWidth()) / viewportHeight : Real(1);
+                Real pivotX = (parentLeft + mRotationPivotLeft * mPixelScaleX) * 2 - 1;
+                Real pivotY = 1 - (parentTop + mRotationPivotTop * mPixelScaleY) * 2;
+                Real cosine = std::cos(mRotationRadians);
+                Real sine = std::sin(mRotationRadians);
+
+                // Clip space is stretched by the aspect ratio, so X is scaled to pixels before rotating and back afterwards.
+                Matrix4 rotation = Matrix4::IDENTITY;
+                rotation[0][0] = cosine;
+                rotation[0][1] = -sine / aspect;
+                rotation[0][3] = pivotX - cosine * pivotX + sine / aspect * pivotY;
+                rotation[1][0] = aspect * sine;
+                rotation[1][1] = cosine;
+                rotation[1][3] = pivotY - aspect * sine * pivotX - cosine * pivotY;
+                mDerivedRotation = parentRotation * rotation;
+            }
+        }
 
         mDerivedOutOfDate = false;
 

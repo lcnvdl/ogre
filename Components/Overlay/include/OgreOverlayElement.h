@@ -144,6 +144,16 @@ namespace Ogre {
         Real mDerivedTop;
         bool mDerivedOutOfDate;
 
+        /// Counterclockwise rotation of this element around its pivot
+        Real mRotationRadians;
+        /// Pivot of the rotation, in the metrics of the element and relative to the origin of the parent
+        Real mRotationPivotLeft;
+        Real mRotationPivotTop;
+        /// Whether this element or one of its ancestors is rotated, so mDerivedRotation applies
+        bool mDerivedRotationEnabled;
+        /// Clip space transform that accumulates the rotations of this element and its ancestors
+        Matrix4 mDerivedRotation;
+
         /// Flag indicating if the vertex positions need recalculating
         bool mGeomPositionsOutOfDate;
         /// Flag indicating if the vertex uvs need recalculating
@@ -298,6 +308,21 @@ namespace Ogre {
 
         /** Disables the scissor test enabled by preRender. */
         void postRender(SceneManager* sm, RenderSystem* rsys) override;
+
+        /** Rotates this element and its descendants around a pivot.
+
+            Rotates in viewport pixels, so the element keeps its proportions in any aspect ratio.
+            @param radians Counterclockwise angle.
+            @param pivotLeft Horizontal pivot, in the metrics of the element and relative to the origin of the parent.
+            @param pivotTop Vertical pivot, in the metrics of the element and relative to the origin of the parent.
+        */
+        void setRotation(Real radians, Real pivotLeft, Real pivotTop);
+
+        /** Gets the clip space rotation accumulated from the ancestors and this element.
+            @param rotation Receives the transform.
+            @return false when neither this element nor its ancestors are rotated.
+        */
+        bool _getDerivedRotation(Matrix4& rotation) const;
 
         /** Tell the object to recalculate */
         virtual void _positionsOutOfDate(void);

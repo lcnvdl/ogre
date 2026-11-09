@@ -88,6 +88,11 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - `OgreOverlay.i` ignora `preRender`/`postRender` de `OverlayElement`: en C# `Renderable` no es su base (herencia simple) y SWIG generaba un `override` inválido.
 - Cambia el layout de `OverlayElement`: hay que recompilar todo lo que use el overlay (Bites). Lo usa Argon para `clipChildren` y `ScrollRect`. Probado en Windows con D3D11 (2026-11-08); Linux y Android sin recompilar todavía.
 
+### Overlay: rotación de elementos e insets de recorte
+- `OverlayElement::setRotation(radianes, pivotLeft, pivotTop)`: rota el elemento y sus descendientes en sentido antihorario alrededor de un pivote, relativo al origen del padre y en la métrica del elemento. Lo aplica `getWorldTransforms`, así que vale para paneles y texto. `_updateFromParent` acumula la rotación de los ancestros en `mDerivedRotation`, en clip space, corrigiendo la proporción del viewport para que el elemento no se deforme. Sin rotación en la cadena, el camino no cambia.
+- `OverlayContainer::setClipInsets(left, top, right, bottom)`: achica el rectángulo con el que `setClipChildren` recorta a los descendientes, para contenedores que dibujan fuera de su área lógica (Argon lo usa con las sombras de UI).
+- El scissor de `clipChildren` sigue siendo un rectángulo sin rotar. Cambia el layout de `OverlayElement`: hay que recompilar todo lo que use el overlay (Bites). Linux y Android sin recompilar todavía.
+
 ### Overlay: alto de celda de las fuentes con stb (`OgreFont.cpp`)
 - En la rama sin FreeType, `_prepareFont` calculaba la celda como `alto del glifo más alto * 1.125`, pero `_loadGlyphs` escribe cada glifo desde `mTtfMaxBearingY + r.top`. Las colas (`g`, `j`, `y`, `@`) se pasaban de la celda: salían recortadas y se pintaban en el separador y en la fila siguiente del atlas, lo que se veía como trazos sueltos encima de otras letras.
 - Ahora la celda mide como mínimo `mTtfMaxBearingY + max_descent`. A igual alto de carácter, las fuentes cuya celda crece se ven hasta un 10 % más chicas (Roboto Slab Bold a 64 pt pasa de 97 a 101 texels; Exo2 a 32 pt, de 47 a 52).
