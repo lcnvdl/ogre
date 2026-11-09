@@ -88,5 +88,9 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - `OgreOverlay.i` ignora `preRender`/`postRender` de `OverlayElement`: en C# `Renderable` no es su base (herencia simple) y SWIG generaba un `override` inválido.
 - Cambia el layout de `OverlayElement`: hay que recompilar todo lo que use el overlay (Bites). Lo usa Argon para `clipChildren` y `ScrollRect`. Probado en Windows con D3D11 (2026-11-08); Linux y Android sin recompilar todavía.
 
+### Assimp: pesos de marcador en huesos sin influencias (`AssimpLoader.cpp`)
+- El importador glTF de Assimp le da a cada hueso sin pesos uno de marcador (vértice 0, peso 0). `createSubMesh` los copiaba como asignaciones, así que el vértice 0 podía superar las 4 y `Mesh::_rationaliseBoneAssignments` avisaba `more than 4 bone assignments` aunque el modelo cumpliera el límite.
+- Ahora se ignoran los pesos no positivos. Probado en Windows con D3D11 (2026-11-09) con `Character_Old_Lady_01.glb`, que deja de avisar, y con una copia con 5 influencias reales en un vértice, que sigue avisando; Linux y Android sin recompilar todavía.
+
 ### Herramientas locales (`51c7ecab9`)
 - `CLAUDE.md` y scripts `build*.bat` (sin trackear salvo `CLAUDE.md`). Este `CustomChangelog.md`, referenciado desde `CLAUDE.md`.

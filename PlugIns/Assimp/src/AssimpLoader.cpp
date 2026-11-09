@@ -1436,6 +1436,10 @@ bool AssimpLoader::createSubMesh(const String& name, int index, const aiNode* pN
                 {
                     aiVertexWeight aiWeight = pAIBone->mWeights[weightIdx];
 
+                    // Assimp's glTF importer gives bones without influences a placeholder weight of 0 on vertex 0
+                    if (aiWeight.mWeight <= 0)
+                        continue;
+
                     VertexBoneAssignment vba;
                     vba.vertexIndex = aiWeight.mVertexId;
                     vba.boneIndex = mSkeleton->getBone(bname)->getHandle();
