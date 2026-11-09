@@ -375,6 +375,7 @@ namespace Ogre
 
         // FT_Set_Char_Size below makes the em size `points * dpi / 72` pixels.
         float scale = stbtt_ScaleForMappingEmToPixels(font, vpScale * mTtfSize * mTtfResolution / 72);
+        int32 max_descent = 0;
         for (const CodePointRange& range : mCodePointRangeList)
         {
             glyphCount += range.second - range.first + 1;
@@ -387,11 +388,14 @@ namespace Ogre
                 stbtt_GetGlyphBitmapBox(font, idx, scale, scale, &r.left, &r.top, &r.right, &r.bottom);
                 max_height = std::max(r.height(), max_height);
                 mTtfMaxBearingY = std::max(-r.top, mTtfMaxBearingY);
+                max_descent = std::max(r.bottom, max_descent);
                 max_width = std::max(r.width(), max_width);
             }
         }
 
-        max_height *= 1.125;
+        // Glyphs are written from the top of the cell at mTtfMaxBearingY + r.top, so the
+        // cell must reach the deepest descender or it spills into the row below.
+        max_height = std::max<int32>(max_height * 1.125, mTtfMaxBearingY + max_descent);
         return font;
 #endif
     }

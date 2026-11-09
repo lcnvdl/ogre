@@ -88,6 +88,11 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - `OgreOverlay.i` ignora `preRender`/`postRender` de `OverlayElement`: en C# `Renderable` no es su base (herencia simple) y SWIG generaba un `override` inválido.
 - Cambia el layout de `OverlayElement`: hay que recompilar todo lo que use el overlay (Bites). Lo usa Argon para `clipChildren` y `ScrollRect`. Probado en Windows con D3D11 (2026-11-08); Linux y Android sin recompilar todavía.
 
+### Overlay: alto de celda de las fuentes con stb (`OgreFont.cpp`)
+- En la rama sin FreeType, `_prepareFont` calculaba la celda como `alto del glifo más alto * 1.125`, pero `_loadGlyphs` escribe cada glifo desde `mTtfMaxBearingY + r.top`. Las colas (`g`, `j`, `y`, `@`) se pasaban de la celda: salían recortadas y se pintaban en el separador y en la fila siguiente del atlas, lo que se veía como trazos sueltos encima de otras letras.
+- Ahora la celda mide como mínimo `mTtfMaxBearingY + max_descent`. A igual alto de carácter, las fuentes cuya celda crece se ven hasta un 10 % más chicas (Roboto Slab Bold a 64 pt pasa de 97 a 101 texels; Exo2 a 32 pt, de 47 a 52).
+- La rama FreeType no cambia. Probado en Windows con D3D11 (2026-11-08).
+
 ### Assimp: pesos de marcador en huesos sin influencias (`AssimpLoader.cpp`)
 - El importador glTF de Assimp le da a cada hueso sin pesos uno de marcador (vértice 0, peso 0). `createSubMesh` los copiaba como asignaciones, así que el vértice 0 podía superar las 4 y `Mesh::_rationaliseBoneAssignments` avisaba `more than 4 bone assignments` aunque el modelo cumpliera el límite.
 - Ahora se ignoran los pesos no positivos. Probado en Windows con D3D11 (2026-11-09) con `Character_Old_Lady_01.glb`, que deja de avisar, y con una copia con 5 influencias reales en un vértice, que sigue avisando; Linux y Android sin recompilar todavía.
