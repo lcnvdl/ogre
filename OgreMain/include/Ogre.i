@@ -915,6 +915,10 @@ SHARED_PTR(Material);
         SHARED_PTR(PSSMShadowCameraSetup);
         %include "OgreShadowCameraSetupPSSM.h"
             %template(SplitPointList) std::vector<Ogre::Real>;
+            // create() returns the base ShadowCameraSetupPtr: this downcast lets bindings configure the splits
+            %extend Ogre::ShadowCameraSetup {
+                Ogre::PSSMShadowCameraSetup* asPSSM() { return dynamic_cast<Ogre::PSSMShadowCameraSetup*>($self); }
+            }
     %ignore Ogre::Frustum::getFrustumExtents(Real&, Real& ,Real& ,Real&) const;
     %include "OgreFrustum.h"
         %ignore Ogre::Camera::setPosition;
