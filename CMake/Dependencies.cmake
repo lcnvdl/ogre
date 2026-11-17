@@ -178,6 +178,14 @@ if(OGRE_BUILD_DEPENDENCIES AND NOT EXISTS ${OGREDEPS_PATH})
           ${PROJECT_BINARY_DIR}/v6.0.5.tar.gz)
       execute_process(COMMAND ${CMAKE_COMMAND}
           -E tar xf v6.0.5.tar.gz WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
+      # Argon: see PatchAssimp.cmake (FBX rotations between keys take the shortest path).
+      execute_process(COMMAND ${CMAKE_COMMAND}
+          -DASSIMP_SOURCE_DIR=${PROJECT_BINARY_DIR}/assimp-6.0.5
+          -P ${PROJECT_SOURCE_DIR}/CMake/Utils/PatchAssimp.cmake
+          RESULT_VARIABLE ASSIMP_PATCH_RESULT)
+      if(NOT ASSIMP_PATCH_RESULT EQUAL 0)
+        message(FATAL_ERROR "Patching Assimp failed")
+      endif()
       execute_process(COMMAND ${BUILD_COMMAND_COMMON}
           -DZLIB_ROOT=${OGREDEPS_PATH}
           -DBUILD_SHARED_LIBS=OFF

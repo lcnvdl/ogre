@@ -103,6 +103,12 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - `AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS = false` para todos los FBX: sin eso Assimp intercala nodos `<hueso>_$AssimpFbx$_*` entre los huesos y les pone las pistas de animación.
 - No cambia la API pública (solo un método privado nuevo): basta con recompilar `Codec_Assimp` y copiar la DLL. Argon lo usa para los clips de otro archivo (`ExternalAnimationClipLibrary`). Compilado y probado en Windows (2026-11-17); falta compilar Linux y Android.
 
+### Deps: Assimp, rotaciones FBX por el camino corto (`CMake/Utils/PatchAssimp.cmake`)
+- `FBXConverter::GetRotationKeyframeList` de Assimp 6.0.5 toma las curvas Euler literales: si dos keys seguidos difieren en 180° o más (177° → -179°, la misma orientación a 4° de distancia), inserta keys cada 179° para reproducir el giro largo. Los keys insertados son cuaterniones válidos, así que Ogre los recorre y el hueso da casi una vuelta entera entre los dos keys (la pierna de `HumanM@Walk01_Forward.fbx` de Kevin Iglesias).
+- `PatchAssimp.cmake` desenvuelve cada key a menos de 180° del anterior (`vc -= 360 * round((vc - vp) / 360)`), lo que no cambia la orientación de ningún key y deja sin saltos que subdividir. `Dependencies.cmake` lo aplica después de descomprimir Assimp; es idempotente y falla si no encuentra el texto a reemplazar (otra versión de Assimp).
+- Efecto colateral: una curva que gira a propósito más de 180° entre dos keys seguidos ya no gira (mismo criterio que "Resample Curves" de Unity).
+- En un build existente: `cmake -DASSIMP_SOURCE_DIR=build/assimp-6.0.5 -P CMake/Utils/PatchAssimp.cmake`, `cmake --build build/assimp-6.0.5 --target install --config Release` y recompilar `Codec_Assimp`. Probado en Windows (2026-11-17): en `B-thigh.L/R` del clip de caminata, de 27 a 25 keys de rotación y el paso máximo entre keys de 179° a 15°. Falta Linux y Android.
+
 ### Assimp: pesos de marcador en huesos sin influencias (`AssimpLoader.cpp`)
 - El importador glTF de Assimp le da a cada hueso sin pesos uno de marcador (vértice 0, peso 0). `createSubMesh` los copiaba como asignaciones, así que el vértice 0 podía superar las 4 y `Mesh::_rationaliseBoneAssignments` avisaba `more than 4 bone assignments` aunque el modelo cumpliera el límite.
 - Ahora se ignoran los pesos no positivos. Probado en Windows con D3D11 (2026-11-09) con `Character_Old_Lady_01.glb`, que deja de avisar, y con una copia con 5 influencias reales en un vértice, que sigue avisando; Linux y Android sin recompilar todavía.
