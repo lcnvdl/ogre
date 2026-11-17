@@ -412,6 +412,9 @@ bool AssimpLoader::_load(const char* name, Assimp::Importer& importer, Mesh* mes
 
     importer.SetPropertyFloat("PP_GSN_MAX_SMOOTHING_ANGLE", maxEdgeAngle);
     importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_EMBEDDED_TEXTURES_LEGACY_NAMING, true);
+    // Pivot helper nodes ("<bone>_$AssimpFbx$_Rotation"...) would otherwise be inserted between
+    // the bones of FBX skeletons and receive the animation channels instead of the bones.
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, false);
 
     const aiScene* scene = importer.ReadFile(name, flags);
 
@@ -433,8 +436,9 @@ bool AssimpLoader::_load(const char* name, Assimp::Importer& importer, Mesh* mes
     grabNodeNamesFromNode(scene, scene->mRootNode);
     computeNodesDerivedTransform(scene, scene->mRootNode, scene->mRootNode->mTransformation);
     grabBoneNamesFromNode(scene, scene->mRootNode);
+    bool hasAnimationOnlySkeleton = mBonesByName.empty() && grabBoneNamesFromAnimations(scene);
 
-    if (mBonesByName.size())
+    if (mBonesByName.size() || hasAnimationOnlySkeleton)
     {
         mSkeleton = SkeletonManager::getSingleton().create(basename + ".skeleton", mesh->getGroup(), true);
 
@@ -779,6 +783,37 @@ void AssimpLoader::markAllChildNodesAsNeeded(const aiNode* pNode)
         const aiNode* pChildNode = pNode->mChildren[childIdx];
         markAllChildNodesAsNeeded(pChildNode);
     }
+}
+
+bool AssimpLoader::grabBoneNamesFromAnimations(const aiScene* mScene)
+{
+    // Files that only hold an armature and its clips (e.g. Mixamo "without skin" exports) have no
+    // weighted bones. Their skeleton is made of the animated nodes and everything below them, with
+    // the node rest transforms as bind pose. Files with geometry keep the old behaviour: node
+    // animations of unskinned meshes are not turned into a skeleton.
+    if (mScene->mNumMeshes > 0 || !mScene->HasAnimations())
+        return false;
+
+    bool foundAnimatedNode = false;
+    for (unsigned int animationIndex = 0; animationIndex < mScene->mNumAnimations; ++animationIndex)
+    {
+        const aiAnimation* animation = mScene->mAnimations[animationIndex];
+        for (unsigned int channelIndex = 0; channelIndex < animation->mNumChannels; ++channelIndex)
+        {
+            const aiNode* node = mScene->mRootNode->FindNode(animation->mChannels[channelIndex]->mNodeName);
+            if (!node || node == mScene->mRootNode)
+                continue;
+
+            markAllChildNodesAsNeeded(node);
+            foundAnimatedNode = true;
+        }
+    }
+
+    if (foundAnimatedNode && !mQuietMode)
+    {
+        LogManager::getSingleton().logMessage("No skinned meshes: skeleton built from the animated nodes");
+    }
+    return foundAnimatedNode;
 }
 
 void AssimpLoader::grabNodeNamesFromNode(const aiScene* mScene, const aiNode* pNode)

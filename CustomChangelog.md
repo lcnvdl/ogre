@@ -98,6 +98,11 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - Ahora la celda mide como mínimo `mTtfMaxBearingY + max_descent`. A igual alto de carácter, las fuentes cuya celda crece se ven hasta un 10 % más chicas (Roboto Slab Bold a 64 pt pasa de 97 a 101 texels; Exo2 a 32 pt, de 47 a 52).
 - La rama FreeType no cambia. Probado en Windows con D3D11 (2026-11-08).
 
+### Assimp: archivos con solo armadura y clips (`AssimpLoader.cpp`)
+- `grabBoneNamesFromAnimations`: si la escena no tiene mallas pero sí animaciones (los FBX de Mixamo "without skin"), los nodos animados y sus descendientes pasan a ser los huesos, con la transformación de los nodos como pose de reposo. Antes no se creaba esqueleto ni se leían los clips. Las escenas con mallas no cambian.
+- `AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS = false` para todos los FBX: sin eso Assimp intercala nodos `<hueso>_$AssimpFbx$_*` entre los huesos y les pone las pistas de animación.
+- No cambia la API pública (solo un método privado nuevo): basta con recompilar `Codec_Assimp` y copiar la DLL. Argon lo usa para los clips de otro archivo (`ExternalAnimationClipLibrary`). Compilado y probado en Windows (2026-11-17); falta compilar Linux y Android.
+
 ### Assimp: pesos de marcador en huesos sin influencias (`AssimpLoader.cpp`)
 - El importador glTF de Assimp le da a cada hueso sin pesos uno de marcador (vértice 0, peso 0). `createSubMesh` los copiaba como asignaciones, así que el vértice 0 podía superar las 4 y `Mesh::_rationaliseBoneAssignments` avisaba `more than 4 bone assignments` aunque el modelo cumpliera el límite.
 - Ahora se ignoran los pesos no positivos. Probado en Windows con D3D11 (2026-11-09) con `Character_Old_Lady_01.glb`, que deja de avisar, y con una copia con 5 influencias reales en un vértice, que sigue avisando; Linux y Android sin recompilar todavía.

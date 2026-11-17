@@ -105,6 +105,8 @@ private:
                        const MaterialPtr& matptr, Mesh* mMesh, AxisAlignedBox& mAAB);
     void grabNodeNamesFromNode(const aiScene* mScene, const aiNode* pNode);
     void grabBoneNamesFromNode(const aiScene* mScene, const aiNode* pNode);
+    /// flags the animated nodes as bones when the scene has no meshes; true if any was found
+    bool grabBoneNamesFromAnimations(const aiScene* mScene);
     void computeNodesDerivedTransform(const aiScene* mScene, const aiNode* pNode,
                                       const aiMatrix4x4& accTransform);
     void createBonesFromNode(const aiScene* mScene, const aiNode* pNode);
