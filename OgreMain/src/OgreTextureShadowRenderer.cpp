@@ -5,6 +5,7 @@
 
 #include "OgreStableHeaders.h"
 #include "OgreShadowCameraSetup.h"
+#include "OgreShadowCameraSetupPSSM.h"
 #include "OgreViewport.h"
 #include "OgreHardwarePixelBuffer.h"
 #include "OgreCompositorManager.h"
@@ -568,7 +569,13 @@ void SceneManager::TextureShadowRenderer::updateShadowTextures(Camera* cam, View
             // also update culling camera
             auto cullCam = dynamic_cast<Camera*>(texCam->getCullingFrustum());
             cullCam->_notifyViewport(shadowView);
-            mCullCameraSetup->getShadowCamera(mSceneManager, cam, vp, light, cullCam, j);
+            const ShadowCameraSetupPtr& lightSetup = light->getCustomShadowCameraSetup()
+                                                         ? light->getCustomShadowCameraSetup()
+                                                         : mDefaultShadowCameraSetup;
+            if (auto pssmSetup = dynamic_cast<const PSSMShadowCameraSetup*>(lightSetup.get()))
+                pssmSetup->getCullingCamera(mSceneManager, cam, vp, light, cullCam, j);
+            else
+                mCullCameraSetup->getShadowCamera(mSceneManager, cam, vp, light, cullCam, j);
 
             // Use the material scheme of the main viewport
             // This is required to pick up the correct shadow_caster_material and similar properties.

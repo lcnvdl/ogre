@@ -133,4 +133,78 @@ namespace Ogre
         _cam->setCullingFrustum(oldCull);
 
     }
+    //---------------------------------------------------------------------
+    void PSSMShadowCameraSetup::getCullingCamera(const SceneManager* sm, const Camera* cam, const Viewport* vp,
+                                                 const Light* light, Camera* cullCam, size_t iteration) const
+    {
+        if (light->getType() != Light::LT_DIRECTIONAL)
+        {
+            DefaultShadowCameraSetup::getShadowCamera(sm, cam, vp, light, cullCam, iteration);
+            return;
+        }
+
+        Real nearDist = mSplitPoints[iteration];
+        Real farDist = mSplitPoints[iteration + 1];
+        if (iteration > 0)
+        {
+            nearDist -= mSplitPadding;
+        }
+        if (iteration < mSplitCount - 1)
+        {
+            farDist += mSplitPadding;
+        }
+
+        // Same trick as getShadowCamera: temporarily narrow the camera to the split to get its corners
+        Camera* splitCam = const_cast<Camera*>(cam);
+        Real oldNear = splitCam->getNearClipDistance();
+        Real oldFar = splitCam->getFarClipDistance();
+        Frustum* oldCull = splitCam->getCullingFrustum();
+        splitCam->setNearClipDistance(nearDist);
+        splitCam->setFarClipDistance(farDist);
+        splitCam->setCullingFrustum(NULL);
+
+        Vector3 corners[8];
+        const Vector3* worldCorners = splitCam->getWorldSpaceCorners();
+        std::copy(worldCorners, worldCorners + 8, corners);
+
+        splitCam->setNearClipDistance(oldNear);
+        splitCam->setFarClipDistance(oldFar);
+        splitCam->setCullingFrustum(oldCull);
+
+        Vector3 towardsLight = -light->getDerivedDirection();
+        towardsLight.normalise();
+        Vector3 up = Vector3::UNIT_Y;
+        if (Math::Abs(up.dotProduct(towardsLight)) >= 1.0f)
+        {
+            up = Vector3::UNIT_Z;
+        }
+        Matrix3 rot = Math::lookRotation(towardsLight, up);
+        Matrix3 toLightSpace = rot.transpose();
+
+        Vector3 minimum(Math::POS_INFINITY);
+        Vector3 maximum(Math::NEG_INFINITY);
+        for (const Vector3& corner : corners)
+        {
+            Vector3 lightSpaceCorner = toLightSpace * corner;
+            minimum.makeFloor(lightSpaceCorner);
+            maximum.makeCeil(lightSpaceCorner);
+        }
+
+        // Small margin so the PCF kernel at the split border still finds its casters
+        const Real borderMargin = 1.02f;
+        Real width = (maximum.x - minimum.x) * borderMargin;
+        Real height = (maximum.y - minimum.y) * borderMargin;
+        Real depth = maximum.z - minimum.z;
+        Real extrusion = sm->getShadowDirectionalLightExtrusionDistance();
+
+        Vector3 lightSpaceEye((minimum.x + maximum.x) * 0.5f, (minimum.y + maximum.y) * 0.5f, maximum.z + extrusion);
+        Vector3 eye = rot * lightSpaceEye;
+
+        cullCam->setCustomProjectionMatrix(false);
+        cullCam->setProjectionType(PT_ORTHOGRAPHIC);
+        cullCam->setOrthoWindow(width, height);
+        cullCam->setNearClipDistance(0.1f);
+        cullCam->setFarClipDistance(extrusion + depth * borderMargin + 1.0f);
+        cullCam->setCustomViewMatrix(true, Math::makeViewMatrix(eye, Quaternion(rot)));
+    }
 }

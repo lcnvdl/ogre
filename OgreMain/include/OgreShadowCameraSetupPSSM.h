@@ -116,6 +116,16 @@ namespace Ogre
         void getShadowCamera(const Ogre::SceneManager *sm, const Ogre::Camera *cam,
             const Ogre::Viewport *vp, const Ogre::Light *light, Ogre::Camera *texCam, size_t iteration) const override;
 
+        /** Sets up the camera used to cull the shadow casters of a split.
+
+            For directional lights, the culling camera is an orthographic box that covers the
+            split frustum in the light plane and extends towards the light up to the directional
+            light extrusion distance, so casters outside the split that throw shadows into it
+            are kept while casters beside it are culled. Other light types use the default setup.
+        */
+        void getCullingCamera(const SceneManager* sm, const Camera* cam, const Viewport* vp,
+                              const Light* light, Camera* cullCam, size_t iteration) const;
+
         /// Returns the calculated split points.
         inline const SplitPointList& getSplitPoints() const
         { return mSplitPoints; }
