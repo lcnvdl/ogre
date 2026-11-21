@@ -113,6 +113,11 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - El importador glTF de Assimp le da a cada hueso sin pesos uno de marcador (vértice 0, peso 0). `createSubMesh` los copiaba como asignaciones, así que el vértice 0 podía superar las 4 y `Mesh::_rationaliseBoneAssignments` avisaba `more than 4 bone assignments` aunque el modelo cumpliera el límite.
 - Ahora se ignoran los pesos no positivos. Probado en Windows con D3D11 (2026-11-09) con `Character_Old_Lady_01.glb`, que deja de avisar, y con una copia con 5 influencias reales en un vértice, que sigue avisando; Linux y Android sin recompilar todavía.
 
+### Terrain: ambiente hemisférico (`OgreTerrainRTShaderSRS.cpp`, `Media/Terrain/TerrainSurface.glsl`)
+- `TerrainSurface::createCpuSubPrograms` llama a `applyHemisphereAmbient(normal, viewMatrix, derivedAmbient, outDiffuse)` en la etapa `FFP_PS_COLOUR_BEGIN + 2`, después de la iluminación por píxel, para escalar el ambiente plano de la escena según la componente vertical de la normal (cielo arriba, suelo de costado o abajo).
+- En `Media/Terrain/TerrainSurface.glsl` del fork los factores `TERRAIN_AMBIENT_SKY` y `TERRAIN_AMBIENT_GROUND` valen 1 (sin cambio visible); Argon usa su propia copia del archivo con valores reales. Un `TerrainSurface.glsl` sin la función no compila con este cambio.
+- No cambia la API pública: basta con recompilar `OgreTerrain` y copiar la DLL. Probado en Windows con D3D11 (2026-11-21); Linux y Android sin recompilar todavía.
+
 ### Bindings: `ShadowCameraSetup::asPSSM()` (`Ogre.i`)
 - `PSSMShadowCameraSetup::create()` devuelve un `ShadowCameraSetupPtr`, y en C# no había forma de llegar a `calculateSplitPoints`, `setOptimalAdjustFactor` o `setSplitPadding` (el constructor del wrapper es `internal`). Un `%extend` agrega `asPSSM()`, un `dynamic_cast` que devuelve un wrapper sin dueño (el `ShadowCameraSetupPtr` mantiene vivo el objeto) o `null`.
 - Solo cambia el wrapper SWIG. Lo usa Argon para las sombras en cascada de las luces direccionales. Linux y Android sin recompilar todavía.

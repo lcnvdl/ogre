@@ -33,6 +33,23 @@ void getShadowFactor(in sampler2D lightmap, in vec2 uv, inout float shadowFactor
     shadowFactor = min(shadowFactor, lmShadow);
 }
 
+// hemispheric ambient: scales the flat scene ambient between a ground and a sky factor by the normal.
+// Neutral by default, so the result matches a flat ambient unless both factors are defined.
+#ifndef TERRAIN_AMBIENT_SKY
+#define TERRAIN_AMBIENT_SKY vec3_splat(1.0)
+#endif
+#ifndef TERRAIN_AMBIENT_GROUND
+#define TERRAIN_AMBIENT_GROUND vec3_splat(1.0)
+#endif
+
+void applyHemisphereAmbient(in vec3 normal, in mat4 viewMatrix, in vec4 ambient, inout vec4 diffuse)
+{
+    vec3 viewUp = normalize(mul(viewMatrix, vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+    float hemisphere = saturate(dot(normalize(normal), viewUp));
+    vec3 ambientScale = mix(TERRAIN_AMBIENT_GROUND, TERRAIN_AMBIENT_SKY, hemisphere);
+    diffuse.xyz += ambient.xyz * (ambientScale - vec3_splat(1.0));
+}
+
 #define MIN_BLEND_WEIGHT 0.0039 // 1/255
 
 void blendTerrainLayer(in float blendWeight, in f32vec2 uv0, in float uvMul,

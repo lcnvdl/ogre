@@ -312,6 +312,12 @@ bool TerrainSurface::createCpuSubPrograms(ProgramSet* programSet)
         stage.callFunction("getShadowFactor", {In(lightMap), In(uvPS), InOut(shadowFactor), At(0)});
     }
 
+    // after the per-pixel lighting added the flat ambient: tint it by the orientation of the normal
+    auto viewMatrix = psProgram->resolveParameter(GpuProgramParameters::ACT_VIEW_MATRIX);
+    auto derivedAmbient = psProgram->resolveParameter(GpuProgramParameters::ACT_DERIVED_AMBIENT_LIGHT_COLOUR);
+    psMain->getStage(FFP_PS_COLOUR_BEGIN + 2)
+        .callFunction("applyHemisphereAmbient", {In(normal), In(viewMatrix), In(derivedAmbient), InOut(outDiffuse)});
+
     if(globalColourMap)
     {
         stage = psMain->getStage(FFP_PS_COLOUR_BEGIN + 2); // after lighting calculations
