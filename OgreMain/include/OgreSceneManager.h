@@ -807,6 +807,23 @@ namespace Ogre {
 
             ShadowCameraSetupPtr mCullCameraSetup;
 
+            static const size_t MAX_SHADOW_CASCADE_VISIBILITY_MASKS = 8;
+            /// Extra visibility mask per split of a directional light
+            uint32 mShadowCascadeVisibilityMasks[MAX_SHADOW_CASCADE_VISIBILITY_MASKS];
+
+            /// What a cached PSSM split was last drawn for
+            struct ShadowCascadeCacheEntry
+            {
+                const Light* light;
+                const Camera* viewer;
+                Vector3 viewerPosition;
+                Vector3 lightDirection;
+            };
+            std::map<const Camera*, ShadowCascadeCacheEntry> mShadowCascadeCache;
+
+            bool isShadowCascadeCacheValid(const Camera* texCam, const Light* light, const Camera* viewer,
+                                           Real refreshDistance) const;
+
             void setShadowTechnique(ShadowTechnique technique);
 
             /** Internal method for turning a regular pass into a shadow caster pass.
@@ -2821,6 +2838,23 @@ namespace Ogre {
         /// Get the number of shadow textures is assigned for the given light type.
         size_t getShadowTextureCountPerLightType(Light::LightTypes type) const
         {return mTextureShadowRenderer.mShadowTextureCountPerType[type]; }
+
+        /** Sets an extra visibility mask for one split of the directional light shadows.
+
+            The shadow texture of split cascadeIndex of a directional light only draws the
+            casters whose visibility flags match this mask, on top of the light mask and the
+            viewport visibility mask. Lets each caster choose the splits it is drawn into.
+            The default is 0xFFFFFFFF for every split. Other light types ignore it.
+        */
+        void setShadowCascadeVisibilityMask(size_t cascadeIndex, uint32 mask);
+        /// Gets the extra visibility mask of one split of the directional light shadows.
+        uint32 getShadowCascadeVisibilityMask(size_t cascadeIndex) const;
+        /** Forces the cached PSSM splits to be drawn again on the next frame.
+
+            Call it when a caster drawn into a cached split moves or changes.
+            @see PSSMShadowCameraSetup::setCachedSplits
+        */
+        void invalidateShadowCascadeCache() { mTextureShadowRenderer.mShadowCascadeCache.clear(); }
 
         /** Sets the size and count of textures used in texture-based shadows. 
         @see setShadowTextureSize and setShadowTextureCount for details, this

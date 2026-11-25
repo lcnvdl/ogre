@@ -2845,6 +2845,22 @@ const std::vector<Camera*>& SceneManager::getShadowTextureCameras()
 {
     return mTextureShadowRenderer.mShadowTextureCameras;
 }
+void SceneManager::setShadowCascadeVisibilityMask(size_t cascadeIndex, uint32 mask)
+{
+    OgreAssert(cascadeIndex < TextureShadowRenderer::MAX_SHADOW_CASCADE_VISIBILITY_MASKS,
+               "cascade index out of range");
+    if (mTextureShadowRenderer.mShadowCascadeVisibilityMasks[cascadeIndex] != mask)
+    {
+        mTextureShadowRenderer.mShadowCascadeVisibilityMasks[cascadeIndex] = mask;
+        mTextureShadowRenderer.mShadowCascadeCache.clear();
+    }
+}
+uint32 SceneManager::getShadowCascadeVisibilityMask(size_t cascadeIndex) const
+{
+    OgreAssert(cascadeIndex < TextureShadowRenderer::MAX_SHADOW_CASCADE_VISIBILITY_MASKS,
+               "cascade index out of range");
+    return mTextureShadowRenderer.mShadowCascadeVisibilityMasks[cascadeIndex];
+}
 
 bool SceneManager::isShadowTextureConfigDirty() const
 {

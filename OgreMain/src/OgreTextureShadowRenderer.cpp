@@ -37,6 +37,9 @@ mShadowCasterRenderBackFaces(true)
     mShadowTextureCountPerType[Light::LT_POINT] = 1;
     mShadowTextureCountPerType[Light::LT_DIRECTIONAL] = 1;
     mShadowTextureCountPerType[Light::LT_SPOTLIGHT] = 1;
+
+    std::fill(mShadowCascadeVisibilityMasks, mShadowCascadeVisibilityMasks + MAX_SHADOW_CASCADE_VISIBILITY_MASKS,
+              0xFFFFFFFF);
 }
 
 SceneManager::TextureShadowRenderer::~TextureShadowRenderer() {}
@@ -462,6 +465,7 @@ void SceneManager::TextureShadowRenderer::destroyShadowTextures(void)
     }
     mShadowTextures.clear();
     mShadowTextureCameras.clear();
+    mShadowCascadeCache.clear();
 
     // set by render*TextureShadowedQueueGroupObjects
     mSceneManager->mAutoParamDataSource->setTextureProjector(NULL, 0);
@@ -501,6 +505,21 @@ void SceneManager::TextureShadowRenderer::prepareTexCam(Camera* texCam, Camera* 
 
     // Fire shadow caster update, callee can alter camera settings
     fireShadowTexturesPreCaster(light, texCam, j);
+}
+bool SceneManager::TextureShadowRenderer::isShadowCascadeCacheValid(const Camera* texCam, const Light* light,
+                                                                    const Camera* viewer, Real refreshDistance) const
+{
+    // About 0.1 degrees: a sun that turns slowly accumulates until it crosses it
+    const Real minimumLightDirectionDot = 0.9999985f;
+
+    auto entry = mShadowCascadeCache.find(texCam);
+    if (entry == mShadowCascadeCache.end())
+        return false;
+
+    const ShadowCascadeCacheEntry& cached = entry->second;
+    return cached.light == light && cached.viewer == viewer &&
+           cached.viewerPosition.squaredDistance(viewer->getDerivedPosition()) <= Math::Sqr(refreshDistance) &&
+           cached.lightDirection.dotProduct(light->getDerivedDirection()) >= minimumLightDirectionDot;
 }
 void SceneManager::TextureShadowRenderer::updateShadowTextures(Camera* cam, Viewport* vp, const LightList* lightList)
 {
@@ -566,13 +585,30 @@ void SceneManager::TextureShadowRenderer::updateShadowTextures(Camera* cam, View
             // rebind camera, incase another SM in use which has switched to its cam
             shadowView->setCamera(texCam);
 
-            // also update culling camera
-            auto cullCam = dynamic_cast<Camera*>(texCam->getCullingFrustum());
-            cullCam->_notifyViewport(shadowView);
+            bool allLayers = shadowTex->getUsage() & TU_TARGET_ALL_LAYERS;
+            size_t layers = std::max(shadowTex->getDepth(), shadowTex->getNumFaces());
+
             const ShadowCameraSetupPtr& lightSetup = light->getCustomShadowCameraSetup()
                                                          ? light->getCustomShadowCameraSetup()
                                                          : mDefaultShadowCameraSetup;
-            if (auto pssmSetup = dynamic_cast<const PSSMShadowCameraSetup*>(lightSetup.get()))
+            auto pssmSetup = dynamic_cast<const PSSMShadowCameraSetup*>(lightSetup.get());
+            bool directional = light->getType() == Light::LT_DIRECTIONAL;
+
+            // A cached split keeps its texture and its frozen texture camera, which the receivers
+            // keep using, until the viewer or the light moves or the cache is invalidated
+            bool cachedSplit = directional && pssmSetup && pssmSetup->isSplitCached(j) && layers == 1;
+            if (cachedSplit &&
+                isShadowCascadeCacheValid(texCam, light, cam, pssmSetup->getCachedSplitRefreshDistance()))
+            {
+                ++si;
+                ++ci;
+                continue;
+            }
+
+            // also update culling camera
+            auto cullCam = dynamic_cast<Camera*>(texCam->getCullingFrustum());
+            cullCam->_notifyViewport(shadowView);
+            if (pssmSetup)
                 pssmSetup->getCullingCamera(mSceneManager, cam, vp, light, cullCam, j);
             else
                 mCullCameraSetup->getShadowCamera(mSceneManager, cam, vp, light, cullCam, j);
@@ -582,10 +618,15 @@ void SceneManager::TextureShadowRenderer::updateShadowTextures(Camera* cam, View
             shadowView->setMaterialScheme(vp->getMaterialScheme());
 
             // Set the viewport visibility flags
-            shadowView->setVisibilityMask(light->getLightMask() & vp->getVisibilityMask());
+            uint32 visibilityMask = light->getLightMask() & vp->getVisibilityMask();
+            if (directional && j < MAX_SHADOW_CASCADE_VISIBILITY_MASKS)
+                visibilityMask &= mShadowCascadeVisibilityMasks[j];
+            shadowView->setVisibilityMask(visibilityMask);
 
-            bool allLayers = shadowTex->getUsage() & TU_TARGET_ALL_LAYERS;
-            size_t layers = std::max(shadowTex->getDepth(), shadowTex->getNumFaces());
+            if (cachedSplit)
+                mShadowCascadeCache[texCam] = {light, cam, cam->getDerivedPosition(), light->getDerivedDirection()};
+            else
+                mShadowCascadeCache.erase(texCam);
 
             prepareTexCam(texCam, cam, vp, light, j);
             if(allLayers && layers <= textureCountPerLight)

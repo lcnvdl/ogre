@@ -29,12 +29,13 @@ THE SOFTWARE.
 
 #include "OgreStableHeaders.h"
 #include "OgreShadowCameraSetupPSSM.h"
+#include "OgreViewport.h"
 
 namespace Ogre
 {
     //---------------------------------------------------------------------
     PSSMShadowCameraSetup::PSSMShadowCameraSetup()
-        : mSplitPadding(1.0f), mCurrentIteration(0)
+        : mSplitPadding(1.0f), mCachedSplitCount(0), mCachedSplitRefreshDistance(0), mCurrentIteration(0)
     {
         calculateSplitPoints(3, 100, 100000);
         setOptimalAdjustFactor(0, 5);
@@ -90,6 +91,72 @@ namespace Ogre
         
     }
     //---------------------------------------------------------------------
+    void PSSMShadowCameraSetup::setCachedSplits(uint cachedSplitCount, Real refreshDistance)
+    {
+        if (cachedSplitCount >= mSplitCount)
+            OGRE_EXCEPT(Exception::ERR_INVALIDPARAMS, "At least one split must not be cached",
+            "PSSMShadowCameraSetup::setCachedSplits");
+        if (refreshDistance < 0)
+            OGRE_EXCEPT(Exception::ERR_INVALIDPARAMS, "Refresh distance cannot be negative",
+            "PSSMShadowCameraSetup::setCachedSplits");
+        mCachedSplitCount = cachedSplitCount;
+        mCachedSplitRefreshDistance = refreshDistance;
+    }
+    //---------------------------------------------------------------------
+    void PSSMShadowCameraSetup::getCachedSplitBox(const SceneManager* sm, const Camera* cam, const Light* light,
+                                                  const Camera* targetCam, size_t iteration, Matrix3& rotation,
+                                                  Vector3& eye, Real& size, Real& farDistance) const
+    {
+        Real splitFar = mSplitPoints[iteration + 1];
+        if (iteration < mSplitCount - 1)
+        {
+            splitFar += mSplitPadding;
+        }
+        Real radius = splitFar + mCachedSplitRefreshDistance;
+
+        Vector3 towardsLight = -light->getDerivedDirection();
+        towardsLight.normalise();
+        Vector3 up = Vector3::UNIT_Y;
+        if (Math::Abs(up.dotProduct(towardsLight)) >= 0.99f)
+        {
+            up = Vector3::UNIT_Z;
+        }
+        rotation = Math::lookRotation(towardsLight, up);
+
+        Vector3 lightSpaceCenter = rotation.transpose() * cam->getDerivedPosition();
+        size = radius * 2;
+
+        // Snap to whole texels so a redraw after the viewer moves does not make the edges shimmer
+        const Viewport* targetViewport = targetCam->getViewport();
+        if (targetViewport && targetViewport->getActualWidth() > 0)
+        {
+            Real texelSize = size / targetViewport->getActualWidth();
+            lightSpaceCenter.x = Math::Floor(lightSpaceCenter.x / texelSize) * texelSize;
+            lightSpaceCenter.y = Math::Floor(lightSpaceCenter.y / texelSize) * texelSize;
+        }
+
+        Real extrusion = sm->getShadowDirectionalLightExtrusionDistance();
+        eye = rotation * Vector3(lightSpaceCenter.x, lightSpaceCenter.y, lightSpaceCenter.z + radius + extrusion);
+        farDistance = extrusion + radius * 2 + 1.0f;
+    }
+    //---------------------------------------------------------------------
+    void PSSMShadowCameraSetup::applyCachedSplitBox(const SceneManager* sm, const Camera* cam, const Light* light,
+                                                    Camera* targetCam, size_t iteration) const
+    {
+        Matrix3 rotation;
+        Vector3 eye;
+        Real size;
+        Real farDistance;
+        getCachedSplitBox(sm, cam, light, targetCam, iteration, rotation, eye, size, farDistance);
+
+        targetCam->setCustomProjectionMatrix(false);
+        targetCam->setProjectionType(PT_ORTHOGRAPHIC);
+        targetCam->setOrthoWindow(size, size);
+        targetCam->setNearClipDistance(0.1f);
+        targetCam->setFarClipDistance(farDistance);
+        targetCam->setCustomViewMatrix(true, Math::makeViewMatrix(eye, Quaternion(rotation)));
+    }
+    //---------------------------------------------------------------------
     Real PSSMShadowCameraSetup::getOptimalAdjustFactor() const
     {
         // simplifies the overriding of the LiSPSM opt adjust factor use
@@ -99,6 +166,13 @@ namespace Ogre
     void PSSMShadowCameraSetup::getShadowCamera(const Ogre::SceneManager *sm, const Ogre::Camera *cam,
         const Ogre::Viewport *vp, const Ogre::Light *light, Ogre::Camera *texCam, size_t iteration) const
     {
+        if (light->getType() == Light::LT_DIRECTIONAL && isSplitCached(iteration))
+        {
+            mCurrentIteration = iteration;
+            applyCachedSplitBox(sm, cam, light, texCam, iteration);
+            return;
+        }
+
         // apply the right clip distance.
         Real nearDist = mSplitPoints[iteration];
         Real farDist = mSplitPoints[iteration + 1];
@@ -140,6 +214,12 @@ namespace Ogre
         if (light->getType() != Light::LT_DIRECTIONAL)
         {
             DefaultShadowCameraSetup::getShadowCamera(sm, cam, vp, light, cullCam, iteration);
+            return;
+        }
+
+        if (isSplitCached(iteration))
+        {
+            applyCachedSplitBox(sm, cam, light, cullCam, iteration);
             return;
         }
 

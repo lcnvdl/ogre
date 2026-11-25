@@ -65,8 +65,17 @@ namespace Ogre
         SplitPointList mSplitPoints;
         OptimalAdjustFactorList mOptimalAdjustFactors;
         Real mSplitPadding;
+        uint mCachedSplitCount;
+        Real mCachedSplitRefreshDistance;
 
         mutable size_t mCurrentIteration;
+
+        /// Orthographic box around the viewer that a cached split covers (see setCachedSplits)
+        void getCachedSplitBox(const SceneManager* sm, const Camera* cam, const Light* light,
+                               const Camera* targetCam, size_t iteration, Matrix3& rotation,
+                               Vector3& eye, Real& size, Real& farDistance) const;
+        void applyCachedSplitBox(const SceneManager* sm, const Camera* cam, const Light* light,
+                                 Camera* targetCam, size_t iteration) const;
 
     public:
         /// @deprecated use create()
@@ -125,6 +134,27 @@ namespace Ogre
         */
         void getCullingCamera(const SceneManager* sm, const Camera* cam, const Viewport* vp,
                               const Light* light, Camera* cullCam, size_t iteration) const;
+
+        /** Marks the farthest splits as cached.
+
+            A cached split of a directional light is not fitted to its slice of the view frustum:
+            it covers a texel-aligned square centred on the viewer position, wide enough for the
+            split far distance plus refreshDistance, so it stays valid while the viewer rotates
+            or moves up to refreshDistance. The shadow renderer then redraws its texture only
+            when the viewer moved further than that, the light changed or
+            SceneManager::invalidateShadowCascadeCache was called.
+        @param cachedSplitCount Number of splits, counted from the farthest one; 0 disables the cache.
+            Must be lower than the split count.
+        @param refreshDistance Distance the viewer can move before the cached splits are redrawn.
+        */
+        void setCachedSplits(uint cachedSplitCount, Real refreshDistance);
+        /// Number of cached splits, counted from the farthest one.
+        uint getCachedSplitCount() const { return mCachedSplitCount; }
+        /// Distance the viewer can move before the cached splits are redrawn.
+        Real getCachedSplitRefreshDistance() const { return mCachedSplitRefreshDistance; }
+        /// Whether the given split is cached.
+        bool isSplitCached(size_t iteration) const
+        { return mCachedSplitCount > 0 && iteration + mCachedSplitCount >= mSplitCount; }
 
         /// Returns the calculated split points.
         inline const SplitPointList& getSplitPoints() const
