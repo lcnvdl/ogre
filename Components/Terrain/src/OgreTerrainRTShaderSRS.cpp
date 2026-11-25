@@ -325,8 +325,9 @@ bool TerrainSurface::createCpuSubPrograms(ProgramSet* programSet)
         stage.mul(In(diffuseSpec).xyz(), In(texTmp).xyz(), Out(diffuseSpec).xyz());
     }
 
+    // the alpha of diffuseSpec holds the specular map: keep the terrain opaque in the scene alpha
     stage = psMain->getStage(FFP_PS_TEXTURING);
-    stage.mul(diffuseSpec, outDiffuse, outDiffuse);
+    stage.mul(In(diffuseSpec).xyz(), In(outDiffuse).xyz(), Out(outDiffuse).xyz());
 
     // FFPColour logic
     psMain->getStage(FFP_PS_COLOUR_END)

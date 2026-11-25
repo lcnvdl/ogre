@@ -118,6 +118,17 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - En `Media/Terrain/TerrainSurface.glsl` del fork los factores `TERRAIN_AMBIENT_SKY` y `TERRAIN_AMBIENT_GROUND` valen 1 (sin cambio visible); Argon usa su propia copia del archivo con valores reales. Un `TerrainSurface.glsl` sin la función no compila con este cambio.
 - No cambia la API pública: basta con recompilar `OgreTerrain` y copiar la DLL. Probado en Windows con D3D11 (2026-11-21); Linux y Android sin recompilar todavía.
 
+### Terrain: alfa opaco (`OgreTerrainRTShaderSRS.cpp`)
+- En `FFP_PS_TEXTURING`, `outDiffuse` se multiplicaba por `diffuseSpec` con las cuatro componentes, y el alfa de `diffuseSpec` es el mapa especular de las capas. El terreno escribía ese especular en el alfa de la escena; Argon usa un alfa menor que 0,1 para marcar el pasto, y su GTAO/SSAO salteaba el terreno y no lo usaba como oclusor. Ahora se multiplica solo `xyz` y el alfa queda en 1. El especular sigue llegando por la etapa de `TVC_SPECULAR`.
+- No cambia la API pública: basta con recompilar `OgreTerrain` y copiar la DLL. Linux y Android sin recompilar todavía.
+
+### Terrain: cortes de sombra del SceneManager (`OgreTerrainMaterialGeneratorA.cpp`)
+- Sin `SM2Profile::setReceiveDynamicShadowsPSSM`, el SRS de sombras del terreno se creaba sin `split_points`: un solo mapa con rango 0, y el terreno nunca recibía sombras. Ahora la función `static` `getShadowSplitPoints` usa, en este orden, el PSSM del profile, el `PSSMShadowCameraSetup` del SceneManager (`getShadowCameraSetup`) o un solo mapa de 0 a `getShadowFarDistance()`. La usan `getMaxLayers` y `generate` (LOD alto y bajo), así que la cuenta de unidades de textura coincide con los mapas que se crean.
+- Los cortes se copian al generar el material: hay que configurar las sombras antes de cargar el terreno. Sin cambios en headers ni en la API.
+
+### Media: lector de sombras con el formato de Argon (`Media/RTShaderLib/SGXLib_IntegratedPSSM.glsl`)
+- En la rama sin `PSSM_SAMPLE_CMP` ni array texture, `SGX_ShadowPCF4` lee los mapas que escribe `Argon/ShadowCaster`: compara la `z/w` del receptor, sin remapear, contra el canal G, con un bias mínimo y un PCF bilineal de 2×2. Argon solo lo usa para el terreno. Es la misma copia que `OgreMedia/RTShaderLib` de Argon: `UpdateBinaries.bat` la copia del fork, así que el cambio tiene que estar acá.
+
 ### Main: recorte de casters por cascada PSSM (`OgreShadowCameraSetupPSSM.h/.cpp`, `OgreTextureShadowRenderer.cpp`)
 - La cámara de culling de cada mapa de sombra se armaba siempre con `mCullCameraSetup` (`DefaultShadowCameraSetup`): un cuadrado ortográfico de `2 × shadowFarDistance` alrededor de la cámara, igual para todas las cascadas. Cada cascada recorría y dibujaba todos los casters del área, aunque su tramo fuera mucho más chico.
 - `PSSMShadowCameraSetup::getCullingCamera` (público, no virtual: no cambia la vtable ni el layout, no hace falta regenerar SWIG) arma, para luces direccionales, una cámara ortográfica con vista custom que cubre en el plano de la luz las 8 esquinas del tramo de la cascada (con el mismo padding que `getShadowCamera` y un 2 % de margen para el PCF) y se extiende hacia la luz hasta `getShadowDirectionalLightExtrusionDistance`, para conservar los casters de afuera que proyectan adentro. Las demás luces siguen con `DefaultShadowCameraSetup`.

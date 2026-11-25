@@ -83,6 +83,44 @@ void SGX_ShadowPCF4(in SAMPLER_TYPE shadowMap, in vec4 shadowMapPos, in vec2 inv
 	c = texture2DProj(shadowMap, shadowMapPos).x;
 #	endif
 }
+#elif !defined(PSSM_SAMPLE_CMP) && !defined(PSSM_ARRAY_TEXTURE)
+// Argon: the shadow maps are written by Argon/ShadowCaster (ShadowCaster_fp.glsl), not by Ogre: R holds the scaled
+// distance to the light and G the projected depth z/w without remapping. Only the terrain uses this receiver, and the
+// terrain casts no shadow, so it needs a tiny bias and no slope bias. Bilinear PCF on a 2x2 grid softens the edges
+// towards the filtering of Argon/Standard.
+#define ARGON_SHADOW_DEPTH_BIAS 0.00002
+#define ARGON_SHADOW_PCF_SPREAD 0.75
+
+float argonShadowTexel(in SAMPLER_TYPE shadowMap, vec2 texel, vec2 invTexSize, float depth)
+{
+	return (depth <= texture2D(shadowMap, (texel + 0.5) * invTexSize).g) ? 1.0 : 0.0;
+}
+
+float argonShadowBilinear(in SAMPLER_TYPE shadowMap, vec2 uv, vec2 invTexSize, float depth)
+{
+	vec2 position = uv / invTexSize - 0.5;
+	vec2 base = floor(position);
+	vec2 weight = position - base;
+	float bottom = mix(argonShadowTexel(shadowMap, base, invTexSize, depth),
+					   argonShadowTexel(shadowMap, base + vec2(1.0, 0.0), invTexSize, depth), weight.x);
+	float top = mix(argonShadowTexel(shadowMap, base + vec2(0.0, 1.0), invTexSize, depth),
+					argonShadowTexel(shadowMap, base + vec2(1.0, 1.0), invTexSize, depth), weight.x);
+	return mix(bottom, top, weight.y);
+}
+
+void SGX_ShadowPCF4(in SAMPLER_TYPE shadowMap, in f32vec4 shadowMapPos, in vec2 invTexSize, out float c)
+{
+	shadowMapPos = shadowMapPos / shadowMapPos.w;
+	vec2 uv = shadowMapPos.xy;
+	float depth = shadowMapPos.z - ARGON_SHADOW_DEPTH_BIAS;
+	vec2 spread = invTexSize * ARGON_SHADOW_PCF_SPREAD;
+
+	c = argonShadowBilinear(shadowMap, uv + vec2(-spread.x, -spread.y), invTexSize, depth);
+	c += argonShadowBilinear(shadowMap, uv + vec2(spread.x, -spread.y), invTexSize, depth);
+	c += argonShadowBilinear(shadowMap, uv + vec2(-spread.x, spread.y), invTexSize, depth);
+	c += argonShadowBilinear(shadowMap, uv + vec2(spread.x, spread.y), invTexSize, depth);
+	c *= 0.25;
+}
 #else
 float sampleDepth(in SAMPLER_TYPE shadowMap, vec2 uv, PSSM_LAYER_ARG(in float layer) float depth)
 {

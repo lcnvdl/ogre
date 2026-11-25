@@ -33,6 +33,7 @@ THE SOFTWARE.
 #include "OgreTextureUnitState.h"
 #include "OgreGpuProgramManager.h"
 #include "OgreShadowCameraSetupPSSM.h"
+#include "OgreSceneManager.h"
 #include "OgreLogManager.h"
 #include "OgreHighLevelGpuProgram.h"
 #include "OgreRoot.h"
@@ -195,6 +196,25 @@ namespace Ogre
         }
     }
     //---------------------------------------------------------------------
+    // Without explicit PSSM settings the shadow receiver used to get no split points, so its single map
+    // had a range of 0 and the terrain never received shadows. Fall back to the cascades of the scene
+    // manager, or to one map that covers the shadow far distance.
+    static PSSMShadowCameraSetup::SplitPointList getShadowSplitPoints(const PSSMShadowCameraSetup* pssm, const Terrain* terrain)
+    {
+        if (pssm)
+            return pssm->getSplitPoints();
+
+        SceneManager* sceneManager = terrain->getSceneManager();
+        const ShadowCameraSetupPtr& sceneSetup = sceneManager->getShadowCameraSetup();
+        if (auto scenePssm = dynamic_cast<const PSSMShadowCameraSetup*>(sceneSetup.get()))
+            return scenePssm->getSplitPoints();
+
+        PSSMShadowCameraSetup::SplitPointList splitPoints;
+        splitPoints.push_back(0);
+        splitPoints.push_back(sceneManager->getShadowFarDistance());
+        return splitPoints;
+    }
+    //---------------------------------------------------------------------
     uint8 TerrainMaterialGeneratorA::SM2Profile::getMaxLayers(const Terrain* terrain) const
     {
         // count the texture units free
@@ -208,11 +228,7 @@ namespace Ogre
             --freeTextureUnits;
         if (isShadowingEnabled(HIGH_LOD, terrain))
         {
-            uint8 numShadowTextures = 1;
-            if (getReceiveDynamicShadowsPSSM())
-            {
-                numShadowTextures = (uint8)getReceiveDynamicShadowsPSSM()->getSplitCount();
-            }
+            uint8 numShadowTextures = (uint8)(getShadowSplitPoints(mPSSM, terrain).size() - 1);
             freeTextureUnits -= numShadowTextures;
         }
 
@@ -259,11 +275,11 @@ namespace Ogre
         // We do this rather than having a specific technique for it since it's simpler
         auto rsc = Root::getSingletonPtr()->getRenderSystem()->getCapabilities();
         uint8 numShadowTextures = 0;
+        PSSMShadowCameraSetup::SplitPointList shadowSplitPoints;
         if (isShadowingEnabled(HIGH_LOD, terrain))
         {
-            numShadowTextures = 1;
-            if (mPSSM)
-                numShadowTextures = static_cast<uint8>(mPSSM->getSplitCount());
+            shadowSplitPoints = getShadowSplitPoints(mPSSM, terrain);
+            numShadowTextures = static_cast<uint8>(shadowSplitPoints.size() - 1);
         }
         if (getRequiredLayers(terrain, numShadowTextures) > rsc->getNumTextureUnits())
         {
@@ -305,8 +321,7 @@ namespace Ogre
             if(isShadowingEnabled(HIGH_LOD, terrain))
             {
                 auto pssm = ShaderGenerator::getSingleton().createSubRenderState(SRS_SHADOW_MAPPING);
-                if(mPSSM)
-                    pssm->setParameter("split_points", mPSSM->getSplitPoints());
+                pssm->setParameter("split_points", shadowSplitPoints);
                 pssm->preAddToRenderState(mainRenderState.get(), pass, pass);
                 mainRenderState->addSubRenderStateInstance(pssm);
             }
@@ -342,8 +357,7 @@ namespace Ogre
                     // light count needed to enable PSSM3
                     lod1RenderState->setLightCount(1);
                     auto pssm = ShaderGenerator::getSingleton().createSubRenderState(SRS_SHADOW_MAPPING);
-                    if(mPSSM)
-                        pssm->setParameter("split_points", mPSSM->getSplitPoints());
+                    pssm->setParameter("split_points", getShadowSplitPoints(mPSSM, terrain));
                     pssm->preAddToRenderState(lod1RenderState.get(), pass, pass);
                     lod1RenderState->addSubRenderStateInstance(pssm);
                 }
