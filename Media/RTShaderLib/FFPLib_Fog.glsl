@@ -41,6 +41,9 @@ THE SOFTWARE.
 // that computes the fog factor based on it.
 // Both techniques use the fog factor in the end of the pixel shader to blend
 // the output color with the fog color.
+// Argon: the exponential modes begin at the start distance (fogParams.y) and
+// the pixel fog caps the fog amount with the alpha of the fog colour, keeping
+// the alpha of the base colour.
 //-----------------------------------------------------------------------------
 
 #define FOG_EXP    1
@@ -57,10 +60,11 @@ void FFP_FogFactor(in float depth,
 #if FOG_TYPE == FOG_LINEAR
 	float fogFactor = (fogParams.z - distance) * fogParams.w;
 #elif FOG_TYPE == FOG_EXP
-	float x       = distance*fogParams.x;
+	float x       = max(distance - fogParams.y, 0.0)*fogParams.x;
 	float fogFactor = 1.0 / exp(x);
 #elif FOG_TYPE == FOG_EXP2
-	float x       = (distance*fogParams.x*distance*fogParams.x);
+	float x       = max(distance - fogParams.y, 0.0)*fogParams.x;
+	x             = x*x;
 	float fogFactor = 1.0 / exp(x);
 #endif
 
@@ -88,5 +92,6 @@ void FFP_PixelFog(in float depth,
 {
 	float fogFactor = 0.0;
 	FFP_FogFactor(depth, fogParams, fogFactor);
-	oColor = mix(fogColor, baseColor, fogFactor);
+	float fogAmount = (1.0 - fogFactor) * saturate(fogColor.a);
+	oColor = vec4(mix(baseColor.rgb, fogColor.rgb, fogAmount), baseColor.a);
 }

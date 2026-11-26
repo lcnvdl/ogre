@@ -118,6 +118,11 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - En `Media/Terrain/TerrainSurface.glsl` del fork los factores `TERRAIN_AMBIENT_SKY` y `TERRAIN_AMBIENT_GROUND` valen 1 (sin cambio visible); Argon usa su propia copia del archivo con valores reales. Un `TerrainSurface.glsl` sin la función no compila con este cambio.
 - No cambia la API pública: basta con recompilar `OgreTerrain` y copiar la DLL. Probado en Windows con D3D11 (2026-11-21); Linux y Android sin recompilar todavía.
 
+### Media: niebla con inicio y opacidad máxima (`Media/RTShaderLib/FFPLib_Fog.glsl`)
+- En los modos exponenciales, `FFP_FogFactor` cuenta la distancia desde `fogParams.y` (el inicio lineal, que Ogre ignoraba en esos modos), así lo cercano queda sin niebla.
+- `FFP_PixelFog` limita la cantidad de niebla con el alfa del color de niebla (Argon guarda ahí la opacidad máxima) y mezcla solo el RGB: conserva el alfa del color base en vez de llevarlo al alfa de la niebla.
+- Es la misma copia que `OgreMedia/RTShaderLib` de Argon (`UpdateBinaries.bat` la copia del fork) y la misma curva que `ArgonFog.glsl` de Argon. No hay que recompilar nada. Probado en Windows con D3D11 (2026-11-26); Linux y Android sin probar.
+
 ### Terrain: alfa opaco (`OgreTerrainRTShaderSRS.cpp`)
 - En `FFP_PS_TEXTURING`, `outDiffuse` se multiplicaba por `diffuseSpec` con las cuatro componentes, y el alfa de `diffuseSpec` es el mapa especular de las capas. El terreno escribía ese especular en el alfa de la escena; Argon usa un alfa menor que 0,1 para marcar el pasto, y su GTAO/SSAO salteaba el terreno y no lo usaba como oclusor. Ahora se multiplica solo `xyz` y el alfa queda en 1. El especular sigue llegando por la etapa de `TVC_SPECULAR`.
 - No cambia la API pública: basta con recompilar `OgreTerrain` y copiar la DLL. Linux y Android sin recompilar todavía.
