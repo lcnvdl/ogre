@@ -150,5 +150,9 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - `PSSMShadowCameraSetup::create()` devuelve un `ShadowCameraSetupPtr`, y en C# no había forma de llegar a `calculateSplitPoints`, `setOptimalAdjustFactor` o `setSplitPadding` (el constructor del wrapper es `internal`). Un `%extend` agrega `asPSSM()`, un `dynamic_cast` que devuelve un wrapper sin dueño (el `ShadowCameraSetupPtr` mantiene vivo el objeto) o `null`.
 - Solo cambia el wrapper SWIG. Lo usa Argon para las sombras en cascada de las luces direccionales. Linux y Android sin recompilar todavía.
 
+### Media: `texture2DLod` en GLSL 1.10 con Mesa (`Media/Main/GLSL_GL3Support.glsl`)
+- Los shaders sin `#version` se compilan como GLSL 1.10, donde `texture2DLod`/`textureCubeLod` no existen en un fragment shader. El driver de NVIDIA los acepta igual, pero Mesa (Intel, AMD, `llvmpipe`) no compila el shader. Para los fragment shaders de GL de escritorio con `__VERSION__ < 130` se habilita `GL_ARB_shader_texture_lod`, que las agrega. GLES y Vulkan no cambian.
+- Probado en Linux con `llvmpipe` (Docker con Xvfb) y con NVIDIA (2026-11-27). Lo usa Argon en su material estándar, la UI y los post-efectos.
+
 ### Herramientas locales (`51c7ecab9`)
 - `CLAUDE.md` y scripts `build*.bat` (sin trackear salvo `CLAUDE.md`). Este `CustomChangelog.md`, referenciado desde `CLAUDE.md`.

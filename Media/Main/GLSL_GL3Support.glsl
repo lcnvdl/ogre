@@ -4,6 +4,10 @@
 
 // @public-api
 
+#if defined(OGRE_FRAGMENT_SHADER) && !defined(OGRE_GLSLES) && !defined(VULKAN) && __VERSION__ < 130
+#extension GL_ARB_shader_texture_lod : enable
+#endif
+
 #if defined(OGRE_FRAGMENT_SHADER) && (defined(OGRE_GLSLES) || defined(VULKAN))
 // define default precisions for ES fragement shaders
 precision mediump float;
