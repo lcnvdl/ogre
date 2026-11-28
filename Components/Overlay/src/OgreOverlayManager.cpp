@@ -216,6 +216,7 @@ namespace Ogre {
             mLastViewportHeight = int(vp->getActualHeight() / mPixelRatio);
         }
 
+        OverlayElement::_resetQueueOrder();
         for (auto& o : mOverlayMap)
         {
             o.second->_findVisibleObjects(cam, pQueue, vp);

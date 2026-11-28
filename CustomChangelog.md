@@ -93,6 +93,12 @@ Cambios propios de este fork (`origin` = `lcnvdl/ogre`) respecto de Ogre oficial
 - `OverlayContainer::setClipInsets(left, top, right, bottom)`: achica el rectángulo con el que `setClipChildren` recorta a los descendientes, para contenedores que dibujan fuera de su área lógica (Argon lo usa con las sombras de UI).
 - El scissor de `clipChildren` sigue siendo un rectángulo sin rotar. Cambia el layout de `OverlayElement`: hay que recompilar todo lo que use el overlay (Bites). Linux y Android sin recompilar todavía.
 
+### Overlay: hermanos en el orden en que se encolan (`OgreOverlayElement.h/.cpp`, `OgreOverlayManager.cpp`)
+- Los elementos con el mismo z-order (la profundidad en el árbol) comparten la prioridad de la cola, y el orden de transparentes (`DistanceSortDescendingLess`) desempata la profundidad por el hash del pass. Como `getSquaredViewDepth` valía `10000 - zOrder` para todos, dos hermanos con materiales distintos se dibujaban en el orden de sus hashes, no en el de los hijos del contenedor.
+- `OverlayElement::_updateRenderQueue` guarda en `mQueueOrder` un contador estático (`msNextQueueOrder`) y `getSquaredViewDepth` devuelve `-mQueueOrder`, así que, dentro de una misma prioridad, se dibuja primero lo que se encoló primero. `OverlayManager::_queueOverlaysForRendering` reinicia el contador con `OverlayElement::_resetQueueOrder()` antes de cada viewport. El z-order sigue mandando entre profundidades distintas.
+- Los hijos de un contenedor se encolan en el orden de `mChildren` (un `std::map` por nombre): Argon nombra los elementos con el handle rellenado con ceros para que ese orden sea el de creación.
+- Cambia el layout de `OverlayElement`: hay que recompilar todo lo que use el overlay (Bites) y regenerar SWIG. Lo usa Argon para que los hermanos de un `Canvas` se dibujen en orden de creación. Linux y Android sin recompilar todavía.
+
 ### Overlay: alto de celda de las fuentes con stb (`OgreFont.cpp`)
 - En la rama sin FreeType, `_prepareFont` calculaba la celda como `alto del glifo más alto * 1.125`, pero `_loadGlyphs` escribe cada glifo desde `mTtfMaxBearingY + r.top`. Las colas (`g`, `j`, `y`, `@`) se pasaban de la celda: salían recortadas y se pintaban en el separador y en la fila siguiente del atlas, lo que se veía como trazos sueltos encima de otras letras.
 - Ahora la celda mide como mínimo `mTtfMaxBearingY + max_descent`. A igual alto de carácter, las fuentes cuya celda crece se ven hasta un 10 % más chicas (Roboto Slab Bold a 64 pt pasa de 97 a 101 texels; Exo2 a 32 pt, de 47 a 52).

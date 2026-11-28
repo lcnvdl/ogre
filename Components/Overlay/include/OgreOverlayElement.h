@@ -163,6 +163,12 @@ namespace Ogre {
             Derived from parent */
         ushort mZOrder;
 
+        /// Position in the render queue of the current frame, used to keep siblings in the order they were queued
+        uint32 mQueueOrder;
+
+        /// Next queue position; OverlayManager resets it before queueing the overlays of a viewport
+        static uint32 msNextQueueOrder;
+
         /// World transforms
         Matrix4 mXForm;
 
@@ -486,11 +492,18 @@ namespace Ogre {
         */
         ushort getZOrder() const { return mZOrder; }
 
+        /** Elements with the same z-order share a render queue priority, where the
+            transparent sort breaks depth ties by pass hash. Returning the queue position
+            makes them draw in the order they were queued (children of a container in
+            name order) whatever their material. */
         Real getSquaredViewDepth(const Camera* cam) const override
-        { 
+        {
             (void)cam;
-            return 10000.0f - (Real)getZOrder(); 
+            return -(Real)mQueueOrder;
         }
+
+        /// Restarts the queue positions; called once per viewport before queueing the overlays
+        static void _resetQueueOrder() { msNextQueueOrder = 0; }
 
         /** @copydoc Renderable::getLights */
         const LightList& getLights(void) const override

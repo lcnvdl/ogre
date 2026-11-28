@@ -57,6 +57,7 @@ namespace Ogre {
     static OverlayElementCommands::CmdVisible msVisibleCmd;
 
     const String& OverlayElement::DEFAULT_RESOURCE_GROUP = ResourceGroupManager::AUTODETECT_RESOURCE_GROUP_NAME;
+    uint32 OverlayElement::msNextQueueOrder = 0;
     //---------------------------------------------------------------------
     OverlayElement::OverlayElement(const String& name)
       : mName(name)
@@ -90,6 +91,7 @@ namespace Ogre {
       , mGeomPositionsOutOfDate(true)
       , mGeomUVsOutOfDate(true)
       , mZOrder(0)
+      , mQueueOrder(0)
       , mEnabled(true)
       , mInitialised(false)
     {
@@ -757,8 +759,9 @@ namespace Ogre {
     {
         if (mVisible)
         {
+            mQueueOrder = msNextQueueOrder++;
             queue->addRenderable(this, RENDER_QUEUE_OVERLAY, mZOrder);
-        }      
+        }
     }
     //---------------------------------------------------------------------
     void OverlayElement::visitRenderables(Renderable::Visitor* visitor, 
